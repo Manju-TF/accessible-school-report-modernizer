@@ -1,0 +1,23 @@
+---
+description: Require a change plan, human approval, and review of AI output
+alwaysApply: true
+---
+
+# Change Protocol
+
+Before implementing, explain:
+
+1. Files you intend to change
+2. Business rules affected
+3. Tests you will add or update
+4. Risks
+
+Do not implement until that explanation is given.
+
+- Human approval is required before major behavior changes.
+- AI-generated changes must be reviewed. Do not treat generated code as already accepted.
+
+```text
+❌ BAD: Start editing report totals, then mention the change afterward
+✅ GOOD: List files, rules, tests, and risks; wait if the change alters behavior
+```

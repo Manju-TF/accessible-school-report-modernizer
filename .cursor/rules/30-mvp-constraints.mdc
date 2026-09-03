@@ -1,0 +1,18 @@
+---
+description: Keep the 30-hour MVP simple with SQLite and tested calculations
+alwaysApply: true
+---
+
+# MVP Constraints
+
+This is a 30-hour capstone. Do not over-engineer.
+
+- SQLite is the required MVP database. Do not introduce another database.
+- Business calculations require automated tests.
+- Prefer simple, testable C#.
+- Do not add extra layers, frameworks, or services unless required for the MVP.
+
+```text
+❌ BAD: Add a repository/UoW/DI stack "for later"
+✅ GOOD: Use EF Core with SQLite and test the calculation directly
+```

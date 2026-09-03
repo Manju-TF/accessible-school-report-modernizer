@@ -1,0 +1,24 @@
+---
+description: Treat /legacy as read-only SAS, PDF, Excel, and baseline artifacts
+alwaysApply: true
+---
+
+# Legacy Is Read Only
+
+Never modify anything under `/legacy`.
+
+Never modify:
+
+- Original SAS programs
+- Baseline PDF
+- Original Excel sample
+- Legacy data, inventory, or baseline outputs
+
+Do not clean up, reformat, rename, or overwrite these files.
+
+If a working copy is needed, copy into `src/`, `data/`, or `evidence/`.
+
+```text
+❌ BAD: Edit legacy/sas/*.sas to "fix" a calculation
+✅ GOOD: Leave /legacy untouched; implement the rule in src/ with a test
+```

@@ -1,0 +1,17 @@
+---
+description: Characterize SAS behavior before coding; do not invent or silently change rules
+alwaysApply: true
+---
+
+# Characterize SAS Before Implementing
+
+- Existing SAS behavior must be characterized before implementation.
+- Do not invent business rules.
+- Document ambiguous SAS behavior: what was observed, what is unclear, and the conservative interpretation.
+- Do not silently change existing behavior for cleaner code.
+- Salary suppression must be preserved exactly as characterized from SAS.
+
+```text
+❌ BAD: Guess a salary suppression threshold
+✅ GOOD: Characterize SAS suppression, document ambiguity, preserve it, test it
+```
