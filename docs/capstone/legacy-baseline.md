@@ -2,7 +2,7 @@
 
 This is the integrity record for every file under `/legacy`.
 
-These artifacts are **IMMUTABLE**. Do not modify, reformat, rename, or overwrite them.
+`/legacy` is local-only. It is not published to GitHub. These artifacts are **IMMUTABLE**. Do not modify, reformat, rename, or overwrite them.
 If a working copy is needed, copy into `src/`, `data/`, or `evidence/`.
 
 Verification: `scripts/verify-legacy-integrity.ps1`

@@ -4,7 +4,7 @@ A capstone that replaces a read-only SAS school-employment reporting pipeline wi
 
 The running UI is branded **Meridian Test Client**. Generated PDFs and chrome do not print NALP or ABA names.
 
-`/legacy` is the immutable characterization baseline. It is never edited.
+`/legacy` is the immutable characterization baseline. It stays on this machine only and is not published to GitHub. It is never edited.
 
 This repository is an **AI-assisted modernization**. Cursor agents generated plans and code. Humans reviewed, corrected, and rejected output. Report totals come from deterministic C#, not from the Knowledge Assistant.
 
@@ -139,14 +139,14 @@ Excel extract
     → ODS PDF (GrayscalePrinter) — not a tagged-PDF product
 ```
 
-The files in this repository (not parenthetical copies) are:
+The characterization sources stay in the local `/legacy` folder. They are not in the GitHub clone.
 
 | Artifact | Role |
 |---|---|
-| [`legacy/samples/sample-export.xlsx`](legacy/samples/sample-export.xlsx) | Original graduate extract used as the import sample |
-| [`legacy/sas/createschrptfiles2025.sas`](legacy/sas/createschrptfiles2025.sas) | Builds school counts, salaries, and combined report files |
-| [`legacy/sas/schreptsummary_2025.sas`](legacy/sas/schreptsummary_2025.sas) | Formats seven `PROC REPORT` pages and writes the PDF |
-| [`legacy/baseline/test-school-report.pdf`](legacy/baseline/test-school-report.pdf) | Immutable visual/value baseline (Class of 2024 / July 2025 chrome on that file) |
+| `legacy/samples/sample-export.xlsx` | Original graduate extract used as the import sample |
+| `legacy/sas/createschrptfiles2025.sas` | Builds school counts, salaries, and combined report files |
+| `legacy/sas/schreptsummary_2025.sas` | Formats seven `PROC REPORT` pages and writes the PDF |
+| `legacy/baseline/test-school-report.pdf` | Immutable visual/value baseline (Class of 2024 / July 2025 chrome on that file) |
 
 Characterization: [`docs/capstone/createschrptfiles-analysis.md`](docs/capstone/createschrptfiles-analysis.md), [`docs/capstone/schreptsummary-analysis.md`](docs/capstone/schreptsummary-analysis.md), [`docs/capstone/business-rules.md`](docs/capstone/business-rules.md), [`docs/capstone/report-map.md`](docs/capstone/report-map.md). Ambiguous SAS is recorded as skipped tests, not guessed.
 
@@ -254,7 +254,7 @@ AccessibleSchoolReportModernizer/
 ├── .github/workflows/       quality.yml
 ├── docs/                    Design and characterization
 ├── evidence/                Observed test and review output
-├── legacy/                  Immutable SAS, sample Excel, baseline PDF
+├── legacy/                  Local-only immutable SAS, sample Excel, baseline PDF
 ├── scripts/                 Legacy integrity + read-only SQLite MCP
 ├── src/
 │   ├── AccessibleSchoolReports.Domain/
@@ -727,7 +727,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pre-commit.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-legacy-integrity.ps1
 ```
 
-`scripts/pre-commit.ps1` refuses commits that stage `legacy/sas`, `legacy/samples`, or `legacy/baseline`, then checks hashes in [`docs/capstone/legacy-baseline.md`](docs/capstone/legacy-baseline.md).
+`scripts/pre-commit.ps1` refuses commits that add or change `legacy/sas`, `legacy/samples`, or `legacy/baseline`, then checks hashes in [`docs/capstone/legacy-baseline.md`](docs/capstone/legacy-baseline.md). Untracking `/legacy` is allowed. The folder is gitignored and stays local.
 
 ---
 
