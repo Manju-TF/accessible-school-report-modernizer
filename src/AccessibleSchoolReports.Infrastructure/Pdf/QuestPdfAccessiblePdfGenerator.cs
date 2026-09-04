@@ -5,11 +5,21 @@ using QuestPDF.Infrastructure;
 
 namespace AccessibleSchoolReports.Infrastructure.Pdf;
 
+/// <summary>
+/// Renders the SAS %SCHRPTS / GrayscalePrinter page layout as a tagged PDF/UA-1 target.
+/// Visual design follows legacy/baseline/test-school-report.pdf. Tags do not restyle the page.
+/// Generation is not a validation result and does not certify accessibility.
+/// </summary>
 public sealed class QuestPdfAccessiblePdfGenerator : IAccessiblePdfGenerator
 {
-    private static readonly Color TextColor = Colors.Grey.Darken4;
-    private static readonly Color HeaderFill = Colors.Grey.Lighten3;
-    private static readonly Color BorderColor = Colors.Grey.Darken1;
+    private static readonly Color TextColor = Colors.Black;
+    private static readonly Color HeaderFill = Color.FromHex("#BBBBBB");
+    private static readonly Color RuleColor = Colors.Black;
+    private static readonly string[] FontStack = ["Times New Roman", "Times", "Liberation Serif", "Thorndale AMT", "Lato"];
+    private const float LabelWidth = 126f;
+    private const float DurationLabelWidth = 144f;
+    private const float MeasureWidth = 54f;
+    private const string FooterUrl = SchoolReportPresentation.FooterUrl + ".";
 
     static QuestPdfAccessiblePdfGenerator()
     {
@@ -29,15 +39,19 @@ public sealed class QuestPdfAccessiblePdfGenerator : IAccessiblePdfGenerator
         ArgumentNullException.ThrowIfNull(output);
 
         var printable = SchoolReportLayout.Compose(report);
+        var created = DateTime.UtcNow;
         Document
             .Create(container => Compose(container, printable))
             .WithMetadata(new DocumentMetadata
             {
                 Title = printable.DocumentTitle,
                 Author = "Accessible School Report Modernizer",
-                Subject = "NALP ERSS school employment summary",
+                Subject = "Meridian Test Client school employment summary",
+                Keywords = "school report, employment, test client, Class of 2025",
                 Language = printable.Language,
                 Creator = "AccessibleSchoolReports",
+                CreationDate = created,
+                ModifiedDate = created,
             })
             .WithSettings(new DocumentSettings
             {
@@ -54,159 +68,188 @@ public sealed class QuestPdfAccessiblePdfGenerator : IAccessiblePdfGenerator
             document.Page(pdfPage =>
             {
                 pdfPage.Size(PageSizes.Letter);
-                pdfPage.Margin(36);
-                pdfPage.DefaultTextStyle(text => text.FontSize(9).FontColor(TextColor).FontFamily(Fonts.Calibri));
+                pdfPage.MarginHorizontal(51);
+                pdfPage.MarginTop(10);
+                pdfPage.MarginBottom(24);
+                pdfPage.DefaultTextStyle(text => text
+                    .FontSize(8.2f)
+                    .LineHeight(1.05f)
+                    .FontColor(TextColor)
+                    .FontFamily(FontStack));
 
-                pdfPage.Header().Element(header => ComposeHeader(header, report, page));
-                pdfPage.Content().Element(content => ComposeContent(content, page));
-                pdfPage.Footer().Element(ComposeFooter);
+                pdfPage.Content()
+                    .SemanticLanguage(report.Language)
+                    .SemanticArticle()
+                    .Element(content => ComposeContent(content, report, page));
             });
         }
     }
 
-    private static void ComposeHeader(IContainer container, PrintableReport report, PrintablePage page)
+    private static void ComposeContent(IContainer container, PrintableReport report, PrintablePage page)
     {
-        container.SemanticSection().Column(column =>
+        container.Column(column =>
         {
+            column.Spacing(0);
+
+            if (page.Number == 1)
+            {
+                column.Item()
+                    .SemanticHeader1()
+                    .AlignCenter()
+                    .DefaultTextStyle(TitleStyle)
+                    .Text(report.SchoolName);
+            }
+            else
+            {
+                column.Item()
+                    .SemanticIgnore()
+                    .AlignCenter()
+                    .DefaultTextStyle(TitleStyle)
+                    .Text(report.SchoolName);
+            }
+
             column.Item()
-                .SemanticHeader1()
-                .Text(report.SchoolName)
-                .FontSize(14)
-                .Bold();
-            column.Item()
-                .PaddingTop(2)
                 .SemanticHeader2()
-                .Text(page.Heading)
-                .FontSize(12)
-                .Bold();
-            if (page.Number == 1 && report.TotalReported is not null)
-            {
-                column.Item()
-                    .PaddingTop(8)
-                    .SemanticParagraph()
-                    .Text($"Total Reported = {SchoolReportPresentation.FormatCount(report.TotalReported)}")
-                    .FontSize(11)
-                    .Bold();
-            }
-        });
-    }
+                .AlignCenter()
+                .DefaultTextStyle(TitleStyle)
+                .Text(page.Heading);
 
-    private static void ComposeContent(IContainer container, PrintablePage page)
-    {
-        container.PaddingTop(10).Column(column =>
-        {
-            column.Spacing(10);
-            if (page.Sections.Count == 0)
-            {
-                column.Item()
-                    .SemanticParagraph()
-                    .Text("No rows were stored for the sections that appear on this page.");
-            }
-
-            foreach (var section in page.Sections)
-            {
-                column.Item().Element(item => ComposeSection(item, page, section));
-            }
+            column.Item().PaddingTop(16).Element(table => ComposePageTable(table, report, page));
 
             column.Item()
-                .PaddingTop(6)
+                .PaddingTop(8)
                 .SemanticParagraph()
-                .Text(page.Note);
+                .DefaultTextStyle(text => text.FontSize(9.2f).FontFamily(FontStack).FontColor(TextColor))
+                .Text(NoteText(page.Note));
+
+            column.Item().PaddingTop(14).Element(footer => ComposeNalpFooter(footer, tagged: page.Number == 1));
         });
     }
 
-    private static void ComposeSection(IContainer container, PrintablePage page, PrintableSection section)
+    private static void ComposePageTable(IContainer container, PrintableReport report, PrintablePage page)
     {
-        container.SemanticSection().Column(column =>
-        {
-            column.Item()
-                .SemanticHeader3()
-                .Text(section.Heading)
-                .FontSize(11)
-                .Bold();
-
-            if (page.TableKind == PrintableTableKind.Salary)
-            {
-                column.Item()
-                    .PaddingTop(2)
-                    .SemanticCaption()
-                    .Text(SchoolReportPresentation.SalaryGroupCaption)
-                    .Italic();
-            }
-
-            column.Item().PaddingTop(4).Element(table => ComposeTable(table, page.TableKind, section));
-        });
-    }
-
-    private static void ComposeTable(IContainer container, PrintableTableKind kind, PrintableSection section)
-    {
-        var headers = Headers(kind);
+        var columnCount = ColumnCount(page.TableKind);
         container.SemanticTable().Table(table =>
         {
             table.ColumnsDefinition(columns =>
             {
-                columns.RelativeColumn(2.4f);
-                for (var i = 1; i < headers.Length; i++)
+                if (page.TableKind == PrintableTableKind.Duration)
                 {
-                    columns.RelativeColumn();
+                    columns.ConstantColumn(DurationLabelWidth);
+                    columns.ConstantColumn(MeasureWidth);
+                    columns.ConstantColumn(MeasureWidth);
+                    return;
+                }
+
+                columns.ConstantColumn(LabelWidth);
+                for (var i = 1; i < columnCount; i++)
+                {
+                    columns.ConstantColumn(MeasureWidth);
                 }
             });
 
-            table.Header(header =>
-            {
-                foreach (var title in headers)
-                {
-                    header.Cell().Element(HeaderCell).Text(title).Bold();
-                }
-            });
+            table.Header(header => WriteHeader(header, page.TableKind));
 
-            foreach (var row in section.Rows)
+            if (page.Number == 1 && report.TotalReported is not null)
             {
-                WriteRow(table, kind, row, headerRow: false);
+                table.Cell()
+                    .ColumnSpan((uint)columnCount)
+                    .Element(BannerCell)
+                    .SemanticParagraph()
+                    .Text($"Total Reported = {SchoolReportPresentation.FormatCount(report.TotalReported)}")
+                    .Bold();
             }
 
-            WriteRow(table, kind, section.Subtotal, headerRow: true);
+            foreach (var section in page.Sections)
+            {
+                table.Cell()
+                    .ColumnSpan((uint)columnCount)
+                    .Element(SectionBanner)
+                    .SemanticHeader3()
+                    .Text(section.Heading)
+                    .Bold();
+
+                foreach (var row in section.Rows)
+                {
+                    WriteRow(table, page.TableKind, row, headerRow: false);
+                }
+
+                WriteRow(table, page.TableKind, section.Subtotal, headerRow: true);
+            }
         });
+    }
+
+    private static void WriteHeader(TableCellDescriptor header, PrintableTableKind kind)
+    {
+        if (kind == PrintableTableKind.Salary)
+        {
+            header.Cell().ColumnSpan(3).Element(HeaderCell).Text(" ");
+            header.Cell().ColumnSpan(5).Element(HeaderCell).AlignCenter().Text("Full-time Long-term Salaries").Bold();
+            header.Cell().Element(HeaderCell).Text(" ");
+            header.Cell().Element(HeaderCell).AlignCenter().Text("Number\nReported").Bold();
+            header.Cell().Element(HeaderCell).AlignCenter().Text("% of\nReported").Bold();
+            header.Cell().Element(HeaderCell).AlignCenter().Text("# with\nSalary").Bold();
+            header.Cell().Element(HeaderCell).AlignCenter().Text("25th\nPercentile").Bold();
+            header.Cell().Element(HeaderCell).AlignCenter().Text("Median").Bold();
+            header.Cell().Element(HeaderCell).AlignCenter().Text("75th\nPercentile").Bold();
+            header.Cell().Element(HeaderCell).AlignCenter().Text("Mean").Bold();
+            return;
+        }
+
+        if (kind == PrintableTableKind.Duration)
+        {
+            header.Cell().Element(HeaderCell).Text(" ");
+            header.Cell().ColumnSpan(2).Element(HeaderCell).AlignCenter().Text("Number of Jobs Reported as:").Bold();
+            header.Cell().Element(HeaderCell).Text(" ");
+            header.Cell().Element(HeaderCell).AlignCenter().Text("Long-term\n(1+ years)").Bold();
+            header.Cell().Element(HeaderCell).AlignCenter().Text("Short-term\n(Less than 1 year)").Bold();
+            return;
+        }
+
+        header.Cell().Element(HeaderCell).Text(" ");
+        header.Cell().Element(HeaderCell).AlignCenter().Text("Number\nReported").Bold();
+        header.Cell().Element(HeaderCell).AlignCenter().Text("% of\nReported").Bold();
     }
 
     private static void WriteRow(TableDescriptor table, PrintableTableKind kind, PrintableRow row, bool headerRow)
     {
-        table.Cell().AsSemanticHorizontalHeader().Element(cell => StyledCell(cell, headerRow).Text(row.Label).Bold());
+        table.Cell()
+            .AsSemanticHorizontalHeader()
+            .Element(cell =>
+            {
+                var body = StyledCell(cell, headerRow);
+                if (headerRow)
+                {
+                    body = body.PaddingLeft(20);
+                }
+
+                var text = body.Text(row.Label);
+                if (headerRow)
+                {
+                    text.Bold();
+                }
+            });
+
         foreach (var value in Values(kind, row))
         {
-            table.Cell().Element(cell => StyledCell(cell, headerRow).AlignRight().Text(value));
+            table.Cell().Element(cell => WriteValue(StyledCell(cell, headerRow).AlignCenter(), value, headerRow));
         }
     }
 
-    private static IContainer StyledCell(IContainer container, bool headerRow) =>
-        headerRow ? HeaderCell(container) : BodyCell(container);
-
-    private static string[] Headers(PrintableTableKind kind) => kind switch
+    private static void WriteValue(IContainer container, string value, bool headerRow)
     {
-        PrintableTableKind.CountPercent =>
-        [
-            "Category",
-            "Number Reported",
-            "% of Reported",
-        ],
-        PrintableTableKind.Duration =>
-        [
-            "Category",
-            "Long-term (1+ years)",
-            "Short-term (Less than 1 year)",
-        ],
-        _ =>
-        [
-            "Category",
-            "Number Reported",
-            "% of Reported",
-            "# with Salary",
-            "25th Percentile",
-            "Median",
-            "75th Percentile",
-            "Mean",
-        ],
-    };
+        if (value == SchoolReportPresentation.NotDisplayed)
+        {
+            container.SemanticSpan(SchoolReportPresentation.NotDisplayedAccessibleName).Text(value);
+            return;
+        }
+
+        var text = container.Text(value);
+        if (headerRow)
+        {
+            text.Bold();
+        }
+    }
 
     private static IEnumerable<string> Values(PrintableTableKind kind, PrintableRow row) => kind switch
     {
@@ -215,30 +258,105 @@ public sealed class QuestPdfAccessiblePdfGenerator : IAccessiblePdfGenerator
         _ => [row.Count, row.Percent, row.SalaryN, row.Pct25, row.Median, row.Pct75, row.Mean],
     };
 
-    private static void ComposeFooter(IContainer container)
+    private static int ColumnCount(PrintableTableKind kind) => kind switch
     {
-        container.SemanticSection().Column(column =>
+        PrintableTableKind.CountPercent => 3,
+        PrintableTableKind.Duration => 3,
+        _ => 8,
+    };
+
+    private static string NoteText(string note)
+    {
+        if (string.IsNullOrWhiteSpace(note))
         {
-            column.Item().SemanticParagraph().Text(SchoolReportPresentation.PreparedLine);
-            column.Item().PaddingTop(2).SemanticParagraph().Text(SchoolReportPresentation.Disclaimer);
-            column.Item()
-                .PaddingTop(2)
-                .SemanticLink("NALP ERSS information")
-                .Hyperlink("https://www.nalp.org/erssinfo")
-                .Text("www.nalp.org/erssinfo.");
-        });
+            return string.Empty;
+        }
+
+        return note.StartsWith("Note:", StringComparison.Ordinal) ? note : $"Note: {note}";
     }
+
+    private static void ComposeNalpFooter(IContainer container, bool tagged)
+    {
+        var block = tagged ? container : container.SemanticIgnore();
+        block
+            .DefaultTextStyle(text => text.FontSize(10.1f).FontColor(TextColor).FontFamily(FontStack))
+            .Column(column =>
+            {
+                column.Item().AlignCenter().Element(item =>
+                {
+                    if (tagged)
+                    {
+                        item.SemanticParagraph().Text(SchoolReportPresentation.PreparedLine);
+                    }
+                    else
+                    {
+                        item.Text(SchoolReportPresentation.PreparedLine);
+                    }
+                });
+                column.Item().AlignCenter().Element(item =>
+                {
+                    if (tagged)
+                    {
+                        item.SemanticParagraph().Text(SchoolReportPresentation.Disclaimer);
+                    }
+                    else
+                    {
+                        item.Text(SchoolReportPresentation.Disclaimer);
+                    }
+                });
+                column.Item().AlignCenter().Element(item =>
+                {
+                    if (tagged)
+                    {
+                        item.SemanticLink(SchoolReportPresentation.FooterLinkName)
+                            .Hyperlink(SchoolReportPresentation.FooterUrlHref)
+                            .Text(FooterUrl);
+                    }
+                    else
+                    {
+                        item.Text(FooterUrl);
+                    }
+                });
+            });
+    }
+
+    private static TextStyle TitleStyle(TextStyle text) =>
+        text.FontSize(13).Bold().Italic().FontColor(TextColor).FontFamily(FontStack);
 
     private static IContainer HeaderCell(IContainer container) =>
         container
             .Border(0.5f)
-            .BorderColor(BorderColor)
+            .BorderColor(RuleColor)
             .Background(HeaderFill)
-            .Padding(3);
+            .PaddingVertical(3)
+            .PaddingHorizontal(2)
+            .DefaultTextStyle(text => text.FontSize(9.2f).FontColor(TextColor).FontFamily(FontStack).Bold());
 
-    private static IContainer BodyCell(IContainer container) =>
+    private static IContainer BannerCell(IContainer container) =>
         container
             .Border(0.5f)
-            .BorderColor(BorderColor)
-            .Padding(3);
+            .BorderColor(RuleColor)
+            .PaddingVertical(6)
+            .PaddingHorizontal(4)
+            .DefaultTextStyle(text => text.FontSize(8.2f).FontColor(TextColor).FontFamily(FontStack).Bold());
+
+    private static IContainer SectionBanner(IContainer container) =>
+        container
+            .Border(0.5f)
+            .BorderColor(RuleColor)
+            .PaddingVertical(4)
+            .PaddingHorizontal(4)
+            .DefaultTextStyle(text => text.FontSize(8.2f).FontColor(TextColor).FontFamily(FontStack).Bold());
+
+    private static IContainer StyledCell(IContainer container, bool headerRow) =>
+        container
+            .Border(0.5f)
+            .BorderColor(RuleColor)
+            .PaddingVertical(2)
+            .PaddingHorizontal(2)
+            .DefaultTextStyle(text => text
+                .FontSize(8.2f)
+                .FontColor(TextColor)
+                .FontFamily(FontStack)
+                .Weight(headerRow ? FontWeight.Bold : FontWeight.Normal));
 }

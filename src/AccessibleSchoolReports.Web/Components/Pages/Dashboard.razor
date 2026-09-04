@@ -1,6 +1,7 @@
 @page "/"
 @rendermode InteractiveServer
 @inject SchoolReportsDbContext Db
+@inject WorkingDatabase Database
 
 <PageTitle>Dashboard</PageTitle>
 
@@ -17,6 +18,12 @@ else if (!_loaded)
 }
 else
 {
+    <section class="panel" aria-labelledby="db-location-heading">
+        <h2 id="db-location-heading">Database location</h2>
+        <p class="database-path">@Database.FilePath</p>
+        <p>This is the only SQLite file the application reads and writes.</p>
+    </section>
+
     <div class="card-grid">
         <section class="card" aria-labelledby="db-status-heading">
             <h2 id="db-status-heading">Database status</h2>

@@ -11,7 +11,8 @@
       "command": "C:/Program Files/nodejs/node.exe",
       "args": [
         "--experimental-sqlite",
-        "C:/Users/104046/Desktop/AccessibleSchoolReportModernizer/scripts/mcp-sqlite-readonly.mjs"
+        "C:/Users/104046/Desktop/AccessibleSchoolReportModernizer/scripts/mcp-sqlite-readonly.mjs",
+        "data/schoolreports.db"
       ]
     }
   }

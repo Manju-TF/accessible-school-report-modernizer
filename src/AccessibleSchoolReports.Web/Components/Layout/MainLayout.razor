@@ -1,11 +1,12 @@
 ﻿@inherits LayoutComponentBase
+@inject WorkingDatabase Database
 
 <div class="app-shell">
     <header class="site-header">
         <a class="skip-link" href="#main-content">Skip to main content</a>
         <div class="site-brand">
-            <p class="site-name">School Employment Reports</p>
-            <p class="site-tagline">Import graduate data and generate school summary PDFs</p>
+            <p class="site-name">Meridian Test Client</p>
+            <p class="site-tagline">Test-client school employment reports</p>
         </div>
         <NavMenu />
     </header>
@@ -13,6 +14,10 @@
     <main id="main-content" class="site-main" tabindex="-1">
         @Body
     </main>
+
+    <footer class="site-footer">
+        <p>Working database: <span class="database-path">@Database.FilePath</span></p>
+    </footer>
 </div>
 
 <div id="blazor-error-ui">

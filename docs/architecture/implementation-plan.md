@@ -2,7 +2,7 @@
 
 **Status:** Rejected. Do not implement from this file.
 
-**Superseded by:** `docs/capstone/corrected-plan.md` (approved 30-hour MVP architecture).
+**Superseded by:** `docs/architecture/corrected-plan.md` (approved 30-hour MVP architecture).
 
 This file is the original AI four-project plan. It is kept only as a record of what was proposed and why it was too large for a solo capstone. Required *features* from this plan still apply; they are delivered with the **corrected** layering (one Web project, two tables, no ports).
 
@@ -471,6 +471,6 @@ This budget belongs to the rejected plan. Use the implementation order in `corre
 
 ## Do not start from here
 
-This file is historical. The approved next work is in `docs/capstone/corrected-plan.md`: calculator and `n ge 5` tests first, after the human says to start.
+This file is historical. The approved next work is in `docs/architecture/corrected-plan.md`: calculator and `n ge 5` tests first, after the human says to start.
 
 No application code was added in this documentation-only update.

@@ -10,16 +10,14 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const requested = process.argv[2]
+  ? path.isAbsolute(process.argv[2])
+    ? process.argv[2]
+    : path.join(repoRoot, process.argv[2])
+  : null;
 const candidates = [
-  process.argv[2],
+  requested,
   path.join(repoRoot, "data", "schoolreports.db"),
-  path.join(
-    repoRoot,
-    "src",
-    "AccessibleSchoolReports.Web",
-    "data",
-    "schoolreports.db"
-  ),
 ].filter(Boolean);
 
 const dbPath = candidates.find((candidate) => existsSync(candidate));

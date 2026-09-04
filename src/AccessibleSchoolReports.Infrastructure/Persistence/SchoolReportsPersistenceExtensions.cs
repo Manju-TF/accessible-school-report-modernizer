@@ -17,6 +17,7 @@ public static class SchoolReportsPersistenceExtensions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
+        services.AddSingleton(new WorkingDatabase(SqliteConnectionString.GetDataSource(connectionString)));
         services.AddDbContext<SchoolReportsDbContext>(options =>
             options.UseSqlite(connectionString));
         services.AddDbContextFactory<SchoolReportsDbContext>(

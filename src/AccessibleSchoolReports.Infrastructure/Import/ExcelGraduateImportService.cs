@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using AccessibleSchoolReports.Application.Imports;
 using AccessibleSchoolReports.Domain.Entities;
 using AccessibleSchoolReports.Domain.Persistence;
+using AccessibleSchoolReports.Domain.Recodes;
 using AccessibleSchoolReports.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -95,12 +96,18 @@ public sealed class ExcelGraduateImportService : IGraduateImportService
         var schoolsByCode = existingSchools.ToDictionary(school => school.Code, StringComparer.Ordinal);
         foreach (var code in schoolCodes)
         {
-            if (schoolsByCode.ContainsKey(code))
+            var sasName = LegacySchoolNames.Lookup(code);
+            if (schoolsByCode.TryGetValue(code, out var existing))
             {
+                if (sasName is not null && existing.Name != sasName)
+                {
+                    existing.Name = sasName;
+                }
+
                 continue;
             }
 
-            var school = new School { Code = code };
+            var school = new School { Code = code, Name = sasName };
             _db.Schools.Add(school);
             schoolsByCode[code] = school;
         }

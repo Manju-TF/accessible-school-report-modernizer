@@ -35,9 +35,11 @@ public sealed class ExcelGraduateImportServiceTests
         var graduates = await db.Context.GraduateRecords.Include(g => g.School).OrderBy(g => g.School.Code).ToListAsync();
         Assert.Equal(2, graduates.Count);
         Assert.Equal("10701", graduates[0].School.Code);
+        Assert.Equal("Quinnipiac University School of Law", graduates[0].School.Name);
         Assert.Equal("W", graduates[0].Sex3);
         Assert.Equal(85000m, graduates[0].SalFtPerm);
         Assert.Equal("10702", graduates[1].School.Code);
+        Assert.Equal("University of Connecticut School of Law", graduates[1].School.Name);
         Assert.Null(graduates[1].SalFtPerm);
         Assert.Equal(2, await db.Context.Schools.CountAsync());
     }

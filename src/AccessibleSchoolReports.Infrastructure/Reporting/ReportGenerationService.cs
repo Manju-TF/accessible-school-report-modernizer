@@ -250,7 +250,7 @@ public sealed class ReportGenerationService : IReportGenerationService
             var report = new SchoolReport
             {
                 SchoolCode = calculated.SchoolCode,
-                SchoolName = school.Name,
+                SchoolName = SchoolNameCatalog.DisplayName(school.Code, school.Name),
                 Rows = calculated.Rows,
                 Sections = calculated.Sections,
             };
@@ -374,7 +374,7 @@ public sealed class ReportGenerationService : IReportGenerationService
             ReportRunItemId = item.Id,
             SchoolId = school.Id,
             SchoolCode = school.Code,
-            SchoolName = school.Name,
+            SchoolName = SchoolNameCatalog.DisplayName(school.Code, school.Name),
             Status = status,
             OutputPath = outputPath,
             Message = timedMessage,

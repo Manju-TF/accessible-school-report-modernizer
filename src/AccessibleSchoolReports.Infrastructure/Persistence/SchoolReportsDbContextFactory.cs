@@ -7,8 +7,8 @@ public sealed class SchoolReportsDbContextFactory : IDesignTimeDbContextFactory<
 {
     public SchoolReportsDbContext CreateDbContext(string[] args)
     {
-        var connectionString = SqliteConnectionString.Resolve(
-            "Data Source=data/schoolreports.db",
+        var connectionString = SqliteConnectionString.ResolveWorkingDatabase(
+            $"Data Source={SqliteConnectionString.DefaultRelativePath}",
             Directory.GetCurrentDirectory());
 
         var options = new DbContextOptionsBuilder<SchoolReportsDbContext>()

@@ -71,7 +71,11 @@ else if (_loaded && _runs.Count > 0)
                                                 <td>
                                                     @if (item.Status == RunStatus.Completed && !string.IsNullOrWhiteSpace(item.OutputPath))
                                                     {
-                                                        <a href="@($"/downloads/reports/{item.Id}")">Download PDF for @item.School.Code</a>
+                                                        <a href="@($"/downloads/reports/{item.Id}/{item.School.Code}-summary-report.pdf")"
+                                                           download="@($"{item.School.Code}-summary-report.pdf")"
+                                                           target="_blank"
+                                                           rel="noopener"
+                                                           data-enhance-nav="false">Download PDF for @UiFormat.SchoolLabel(item.School.Code, item.School.Name)</a>
                                                     }
                                                     else
                                                     {

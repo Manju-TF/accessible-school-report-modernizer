@@ -8,29 +8,31 @@ Generation and validation are separate. Passing a generate test is not an access
 
 `IAccessiblePdfGenerator` / `QuestPdfAccessiblePdfGenerator` renders a calculated `SchoolReport` with QuestPDF semantic tags and PDF/UA-1 *conformance settings*. The calculator is not used inside the renderer.
 
-Business content follows `docs/capstone/report-map.md` and 2025 SAS chrome (`SS-HDR-*`, `SS-NOTE-*`, `SS-FTR-01`). Layout is not a pixel match of `legacy/baseline/test-school-report.pdf`.
+Business content follows `docs/capstone/report-map.md` and 2025 SAS chrome (`SS-HDR-*`, `SS-NOTE-*`, `SS-FTR-01`). The **visual** page layout follows `legacy/baseline/test-school-report.pdf` (SAS `%SCHRPTS` / GrayscalePrinter). Accessibility work adds tags and alternative text; it must not invent a new design. Year strings stay on the 2025 SAS chrome (Class of **2025**, July **2026**), not the baseline file’s 2024/July 2025 artifact years.
 
 ## What generation does
 
 | Requirement | How it is targeted | What that is not |
 |---|---|---|
-| Tagged PDF | QuestPDF `SemanticSection`, headings, paragraphs, `SemanticTable`, captions, links | A veraPDF or PAC pass |
+| Tagged PDF | QuestPDF `SemanticArticle` / `SemanticSection`, headings, paragraphs, `SemanticTable`, captions, links | A veraPDF or PAC pass |
 | PDF/UA-oriented structure | `DocumentSettings.PDFUA_Conformance = PDFUA_1` and `PDFA_3A` | A certified PDF/UA-1 file |
 | Document title | `DocumentMetadata.Title` = school name + Class of 2025 Summary Report | Proof a reader will announce it |
-| Document language | `DocumentMetadata.Language` = `en-US` | Proof a screen reader uses the voice |
-| Logical headings | H1 school name, H2 page title, H3 section titles | A checked outline in Acrobat |
-| Correct reading order | One column: header → sections → note → footer | A PAC reading-order check |
-| Semantic tables | `SemanticTable` plus `table.Header` column titles | Proof every TH/TD association is correct |
-| Table headers | Column header row; first-column category cells tagged `SemanticHorizontalHeader` | Manual header-scope review |
-| No color-only information | Missing/suppressed values print as **Not displayed**; headers also use bold + text | A contrast-audit pass |
-| Meaningful text | SAS `.` and blank `$newvar` labels are replaced with words (see below) | A language/clarity review |
-| Page structure | Always seven pages; SAS `ANALVAR` slices; empty groups omitted (`SS-FIL-08`) | Pixel layout of the SAS ODS PDF |
+| Document language | `DocumentMetadata.Language` and `SemanticLanguage("en-US")` on page content | Proof a screen reader uses the voice |
+| Logical headings | Unique H1 school name on page 1 content; H2 page title; H3 section titles | A checked outline in Acrobat |
+| Repeating chrome | Visual page header/footer marked `SemanticIgnore` so they are artifacts, not extra headings | A PAC artifact check |
+| Correct reading order | Page 1 tagged order: H1 → H2 → table headers → Total Reported → sections → note → prepared line → disclaimer → test-client link. Later pages: titles (artifacts after page 1) → table → note → footer artifact | A PAC reading-order check or NVDA/JAWS confirmation |
+| Semantic tables | `SemanticTable` plus `table.Header` column titles and caption on salary tables | Proof every TH/TD association is correct |
+| Table headers | First-column category cells tagged `SemanticHorizontalHeader`; column titles live in `THead` | Manual header-scope review (QuestPDF 2025.12.2 has no vertical-header API) |
+| Contrast and fonts | Black text on white; Times/Thorndale stack; Bold Italic 13pt titles; 8.2pt body; 9.2pt headers; gray `#BBBBBB` header cells | A measured contrast-audit pass or WCAG certification |
+| No color-only information | Missing/suppressed values print as SAS `.` with alternative text **Not displayed**; headers also use bold + text | A contrast-audit pass |
+| Meaningful text | Blank `$newvar` labels are replaced with words (see below). Missing numerics stay `.` visually | A language/clarity review |
+| Page structure | Always seven pages; one table per page; SAS `ANALVAR` slices; empty groups omitted (`SS-FIL-08`) | Pixel-identical SAS ODS wrapping |
 
 ### Accessible wording that differs from SAS print
 
 These are presentation substitutions. They do not change stored counts or salaries.
 
-- SAS missing numeric `.` → `Not displayed`
+- SAS missing numeric `.` is printed as `.`; screen-reader alternative text is `Not displayed`
 - Blank JOBREG3 row label → `# States and Territories with Employed Grads`
 - Blank funded `YES` label → `Funded by law school`
 - 2025 SAS title/footer years (Class of **2025**, July **2026**), not the 2024 baseline artifact years
@@ -47,6 +49,8 @@ Covered today (`QuestPdfAccessiblePdfGeneratorTests`, `SchoolReportLayoutTests`)
 - Seven pages
 - Document title is set
 - Extracted text includes school name, Total Reported, section headings, characterized notes/footer, table column names
+- Page 1 extracted text order: school name → first table → note → test-client link
+- Generated bytes include `/StructTreeRoot`, `/Lang`, and `pdfuaid` markers (structure target only)
 - Empty Education Jobs section is omitted
 - Suppressed salaries and unused duration cells appear as `Not displayed`
 - Renderer consumes a `SchoolReport` fixture (and separately a calculator result) without recalculating
@@ -72,7 +76,7 @@ Suggested (not claimed as done here):
 1. **veraPDF** — PDF/UA-1 and/or PDF/A-3a machine conformance. Save the report under `evidence/` if a run is performed.
 2. **PAC (PDF Accessibility Checker)** — reading order, heading levels, table structure, language, title display.
 3. **Screen reader** (NVDA or JAWS) — open one generated school PDF; navigate headings; read one salary table including a `Not displayed` cell; confirm the note is read after the tables.
-4. **Keyboard / viewer** — bookmarks jump to pages; text can be selected in order; link to `www.nalp.org/erssinfo` works.
+4. **Keyboard / viewer** — bookmarks jump to pages; text can be selected in order; the test-client report-info link works.
 5. **Visual (not pixel match)** — grayscale/high-contrast text; no meaning that exists only as color.
 
 Until those results exist, the correct statement is:

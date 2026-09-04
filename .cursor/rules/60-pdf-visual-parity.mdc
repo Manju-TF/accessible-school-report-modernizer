@@ -1,0 +1,27 @@
+---
+description: Keep generated PDFs visually matched to the SAS baseline; accessibility must not restyle
+alwaysApply: true
+---
+
+# PDF Visual Parity
+
+Generated school PDFs must keep the `legacy/baseline/test-school-report.pdf` layout and GrayscalePrinter design. Accessibility is tags, language, reading order, and alternative text — not a new look.
+
+Do not modify `/legacy`. Do not change calculator or suppression rules to “fit” the page.
+
+```text
+❌ BAD: Restyle the report (new fonts, colors, bottom-pinned footer, blue links) and call it accessible
+✅ GOOD: Keep SAS titles, table grid, notes, and footer; add PDF/UA tags behind that design
+```
+
+Preserve:
+
+- Seven letter pages, one table per page
+- Centered Bold Italic school name and report title
+- Gray header cells, black grid, 8pt body / 9pt headers
+- `Total Reported` as a table row under the headers on page 1
+- Note, then test-client footer, in content flow (not duplicated)
+- Do not print NALP or ABA names in generated PDFs or UI chrome
+- Missing values as `.` (screen-reader name: Not displayed)
+
+Keep 2025 SAS year strings (`Class of 2025`, July 2026). Do not copy the baseline’s 2024/July 2025 artifact years. Do not claim the PDF is accessible without separate validation.
