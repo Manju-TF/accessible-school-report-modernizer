@@ -7,21 +7,7 @@ namespace AccessibleSchoolReports.CharacterizationTests.Support;
 internal static class LegacyRules
 {
     public static readonly IReadOnlyDictionary<string, string> JobcatFormat =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["LJD"] = "1-LJD",
-            ["NLJD"] = "2-NLJD",
-            ["NLP"] = "3-NLP",
-            ["NLO"] = "4-NLO",
-            ["WUNK"] = "5-WUNK",
-            ["ADVD"] = "6-ADVD",
-            ["UDEF"] = "7-UDEF",
-            ["USKW"] = "8-USKW",
-            ["UNWK"] = "9-UNWK",
-            ["UNKN"] = "UNKN",
-            ["FULL"] = "Full-time",
-            ["PART"] = "Part-time",
-        };
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.JobCategoryFormat;
 
     public static readonly IReadOnlyDictionary<string, string> BuilderTimeFormat =
         new Dictionary<string, string>(StringComparer.Ordinal)
@@ -161,75 +147,29 @@ internal static class LegacyRules
     public const int SalarySuppressionMinimumN = 5;
     public const string SalaryVariable = "salftperm";
 
-    public static string RecodeSex3(string sex3) => sex3 switch
-    {
-        "W" => "F",
-        "X" => "N",
-        "ND" => " ",
-        _ => sex3,
-    };
+    public static string RecodeSex3(string sex3) =>
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.NormalizeGender(sex3)!;
 
-    public static string RecodeSource(string source) => source switch
-    {
-        "OTHER" => "ZOTHER",
-        "OCI" => "AOCI",
-        _ => source,
-    };
+    public static string RecodeSource(string source) =>
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.NormalizeJobSource(source)!;
 
     public static string RecodeJobreg(string jobreg) =>
-        jobreg == "0" ? "X" : jobreg;
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.NormalizeJobRegion(jobreg)!;
 
-    public static string RecodeLfjob(string lfjob) => lfjob switch
-    {
-        "ADMIN" => "YADMIN",
-        "OTHNL" => "ZOTHNL",
-        "STATTY" => "ATTYST",
-        _ => lfjob,
-    };
+    public static string RecodeLfjob(string lfjob) =>
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.NormalizeLawFirmJobType(lfjob)!;
 
-    public static string RecodeEmptype1(string emptype1) => emptype1 switch
-    {
-        "JCLOGV" => "JCTLOG",
-        "JCINGV" => "JCXIOG",
-        "JCOTGV" or "JCUNGV" or "JC" => "JCUGOV",
-        _ => emptype1,
-    };
+    public static string RecodeEmptype1(string emptype1) =>
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.NormalizeEmploymentType(emptype1)!;
 
-    public static string? MapFirmSizeForCounts(string firm1) => firm1 switch
-    {
-        "S" => "SOLO",
-        "1" => "LF1",
-        "2" => "LF2",
-        "3" => "LF3",
-        "4" => "LF4",
-        "5" => "LF5",
-        "6" => "LF6",
-        "7" => "LF7",
-        "8" => "LF8",
-        _ => null,
-    };
+    public static string? MapFirmSizeForCounts(string firm1) =>
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.MapFirmSizeForCounts(firm1);
 
-    public static string? MapFirmSizeForSalaries(string firm1) => firm1 switch
-    {
-        "1" => "LF1",
-        "2" => "LF2",
-        "3" => "LF3",
-        "4" => "LF4",
-        "5" => "LF5",
-        "6" => "LF6",
-        "7" => "LF7",
-        "8" => "LF8",
-        _ => null,
-    };
+    public static string? MapFirmSizeForSalaries(string firm1) =>
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.MapFirmSizeForSalaries(firm1);
 
-    public static string? MapSector(string empgen)
-    {
-        if (PublicEmpgen.Contains(empgen, StringComparer.Ordinal))
-            return "PUBLIC";
-        if (PrivateEmpgen.Contains(empgen, StringComparer.Ordinal))
-            return "PRIVATE";
-        return null;
-    }
+    public static string? MapSector(string empgen) =>
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.MapSector(empgen);
 
     public static bool DeleteFromSectorCounts(string empgen) =>
         empgen == "EMPUNK";
@@ -243,14 +183,8 @@ internal static class LegacyRules
     public static bool IncludeInEmploymentStatusCounts(string jobcat1) =>
         jobcat1 != "UNKN";
 
-    public static string? MapD1Newvar(string jobcat)
-    {
-        if (jobcat == "6-ADVD")
-            return "6-ADVD";
-        if (EmployedRollupJobcats.Contains(jobcat, StringComparer.Ordinal))
-            return "EMPL";
-        return null;
-    }
+    public static string? MapD1Newvar(string jobcat) =>
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.MapD1Newvar(jobcat);
 
     public static bool WrittenD1ExclusionContains(string jobcat) =>
         WrittenD1Exclusions.Contains(jobcat, StringComparer.Ordinal);
@@ -259,7 +193,7 @@ internal static class LegacyRules
         n >= SalarySuppressionMinimumN;
 
     public static string CompressJobcatAndFtPt(string jobcat, string jobftpt) =>
-        string.Concat(jobcat, jobftpt).Replace(" ", string.Empty, StringComparison.Ordinal);
+        AccessibleSchoolReports.Domain.Recodes.LegacyRecodes.CompressJobcatAndFtPt(jobcat, jobftpt);
 
     public static bool Page2CharacterFilterIncludes(string analvar) =>
         string.CompareOrdinal(analvar, "D1") >= 0

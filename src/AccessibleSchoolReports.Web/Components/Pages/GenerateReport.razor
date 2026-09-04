@@ -1,0 +1,217 @@
+@page "/generate"
+@rendermode InteractiveServer
+@inject SchoolReportsDbContext Db
+@inject IReportGenerationService Generation
+@inject IOptions<ReportGenerationOptions> GenerationOptions
+@inject IJSRuntime Js
+
+<PageTitle>Generate Report</PageTitle>
+
+<h1>Generate Report</h1>
+<p class="lede">Generate one school summary PDF from stored graduate records. Calculator rules are unchanged.</p>
+
+@if (_schools.Count == 0 && _loadError is null)
+{
+    <p><a href="/import">Go to Import Data</a></p>
+}
+
+@if (_schools.Count > 0)
+{
+    <form aria-label="Generate one school report"
+          @onsubmit="GenerateAsync"
+          @onsubmit:preventDefault
+          aria-busy="@_busy.ToString().ToLowerInvariant()">
+        <div class="form-grid">
+            <div class="field">
+                <label for="school">School</label>
+                <select id="school"
+                        @bind="_selectedSchoolId"
+                        aria-describedby="@SchoolDescribedBy"
+                        aria-required="true"
+                        aria-invalid="@_schoolInvalid.ToString().ToLowerInvariant()"
+                        aria-errormessage="generate-status"
+                        disabled="@_busy">
+                    <option value="0">Select a school</option>
+                    @foreach (var school in _schools)
+                    {
+                        <option value="@school.Id">@UiFormat.SchoolLabel(school.Code, school.Name, school.GraduateCount)</option>
+                    }
+                </select>
+                <p id="school-help" class="hint">Only schools with at least one graduate record are listed.</p>
+            </div>
+            <div class="field">
+                <label for="report-year">Report year</label>
+                <input id="report-year"
+                       type="text"
+                       inputmode="numeric"
+                       maxlength="4"
+                       required
+                       aria-required="true"
+                       @bind="_classYear"
+                       aria-describedby="@YearDescribedBy"
+                       aria-invalid="@_yearInvalid.ToString().ToLowerInvariant()"
+                       aria-errormessage="generate-status"
+                       disabled="@_busy" />
+                <p id="report-year-help" class="hint">Four-digit year used for the output folder. PDF titles remain Class of 2025.</p>
+            </div>
+            <div class="actions">
+                <button type="submit" disabled="@_busy">@(_busy ? "Generating school report" : "Generate school report")</button>
+            </div>
+        </div>
+    </form>
+}
+
+<LiveStatus Id="generate-status" Tone="@_statusTone" Message="@_statusMessage" />
+
+@if (_result is not null)
+{
+    <section class="panel" aria-labelledby="generate-result-heading">
+        <h2 id="generate-result-heading" class="result-heading" tabindex="-1" @ref="_resultHeading">Result</h2>
+        <p><StatusBadge Status="_result.Status" /></p>
+        <p>
+            School @UiFormat.SchoolLabel(_result.SchoolCode ?? "unknown", _result.SchoolName).
+            Graduates @_result.GraduateCount.
+            Duration @UiFormat.Duration(_result.Duration).
+        </p>
+        @if (!string.IsNullOrWhiteSpace(_result.Message))
+        {
+            <p>@_result.Message</p>
+        }
+        @if (_result.Status == RunStatus.Completed && _result.ReportRunItemId is int itemId)
+        {
+            <p>
+                <a class="button" href="@($"/downloads/reports/{itemId}")">Download PDF for school @(_result.SchoolCode)</a>
+            </p>
+        }
+    </section>
+}
+
+@code {
+    private readonly List<SchoolChoice> _schools = [];
+    private int _selectedSchoolId;
+    private string _classYear = "2025";
+    private bool _busy;
+    private bool _schoolInvalid;
+    private bool _yearInvalid;
+    private string? _loadError;
+    private string? _statusMessage;
+    private string _statusTone = "info";
+    private SchoolReportGenerationResult? _result;
+    private ElementReference _resultHeading;
+    private bool _moveFocusToResult;
+
+    private string SchoolDescribedBy =>
+        _schoolInvalid ? "school-help generate-status" : "school-help";
+
+    private string YearDescribedBy =>
+        _yearInvalid ? "report-year-help generate-status" : "report-year-help";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _classYear = GenerationOptions.Value.ClassYear;
+        try
+        {
+            var rows = await Db.Schools
+                .AsNoTracking()
+                .Where(school => Db.GraduateRecords.Any(row => row.SchoolId == school.Id))
+                .OrderBy(school => school.Code)
+                .Select(school => new SchoolChoice(
+                    school.Id,
+                    school.Code,
+                    school.Name,
+                    Db.GraduateRecords.Count(row => row.SchoolId == school.Id)))
+                .ToListAsync();
+            _schools.AddRange(rows);
+        }
+        catch (Exception exception)
+        {
+            _loadError = exception.Message;
+            _statusTone = "error";
+            _statusMessage = exception.Message;
+        }
+
+        if (_loadError is null && _schools.Count == 0)
+        {
+            _statusTone = "warning";
+            _statusMessage = "No schools with graduate records are available. Import a workbook first.";
+        }
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _schoolInvalid = _selectedSchoolId <= 0;
+        _yearInvalid = !IsValidYear(_classYear);
+        if (_schoolInvalid)
+        {
+            _statusTone = "error";
+            _statusMessage = "Select a school before generating a report.";
+            await Js.InvokeVoidAsync("focusById", "school");
+            return;
+        }
+
+        if (_yearInvalid)
+        {
+            _statusTone = "error";
+            _statusMessage = "Report year must be a four-digit year.";
+            await Js.InvokeVoidAsync("focusById", "report-year");
+            return;
+        }
+
+        _busy = true;
+        _statusTone = "info";
+        _statusMessage = "Generating the school report.";
+        _result = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            _result = await Generation.GenerateSchoolReportAsync(
+                _selectedSchoolId,
+                cancellationToken: CancellationToken.None,
+                classYear: _classYear.Trim());
+            _statusTone = UiFormat.StatusTone(_result.Status);
+            _statusMessage = $"Generation {UiFormat.Status(_result.Status).ToLowerInvariant()} for school {_result.SchoolCode}.";
+        }
+        catch (Exception exception)
+        {
+            _statusTone = "error";
+            _statusMessage = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await InvokeAsync(StateHasChanged);
+        _moveFocusToResult = _result is not null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_moveFocusToResult)
+        {
+            return;
+        }
+
+        _moveFocusToResult = false;
+        try
+        {
+            await _resultHeading.FocusAsync();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static bool IsValidYear(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Trim().Length == 4
+        && value.Trim().All(char.IsAsciiDigit);
+
+    private sealed record SchoolChoice(int Id, string Code, string? Name, int GraduateCount);
+}

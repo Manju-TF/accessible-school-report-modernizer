@@ -1,0 +1,29 @@
+<p id="@Id"
+   class="live-status live-status-@Tone @(string.IsNullOrWhiteSpace(Message) ? "live-status-empty" : null)"
+   role="status"
+   aria-live="polite"
+   aria-atomic="true">
+    @if (!string.IsNullOrWhiteSpace(Message))
+    {
+        <strong>@ToneLabel:</strong> @Message
+    }
+</p>
+
+@code {
+    [Parameter]
+    public string Id { get; set; } = "live-status";
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public string Tone { get; set; } = "info";
+
+    private string ToneLabel => Tone switch
+    {
+        "success" => "Success",
+        "error" => "Error",
+        "warning" => "Warning",
+        _ => "Status",
+    };
+}

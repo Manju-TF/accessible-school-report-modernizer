@@ -1,0 +1,132 @@
+@page "/runs"
+@rendermode InteractiveServer
+@inject SchoolReportsDbContext Db
+
+<PageTitle>Run History</PageTitle>
+
+<h1>Run History</h1>
+<p class="lede">Recent report runs, including status, counts, duration, and download links for completed school PDFs.</p>
+
+<LiveStatus Id="runs-status" Tone="@(_loadError is null ? "info" : "error")" Message="@StatusMessage" />
+
+@if (_loaded && _runs.Count == 0 && _loadError is null)
+{
+    <p>No report runs have been recorded yet.</p>
+}
+else if (_loaded && _runs.Count > 0)
+{
+    <ul class="run-list">
+        @foreach (var run in _runs)
+        {
+            var expanded = _expandedRunIds.Contains(run.Id);
+            var schoolsId = $"run-{run.Id}-schools";
+            <li class="panel">
+                <h2>Run @run.Id</h2>
+                <p>
+                    <StatusBadge Status="run.Status" />
+                    @UiFormat.Mode(run.Mode)
+                </p>
+                <p>
+                    Started @UiFormat.Utc(run.StartedUtc).
+                    Total @run.TotalCount.
+                    Successful @run.SuccessfulCount.
+                    Failed @run.FailedCount.
+                    Duration @UiFormat.Duration(run.DurationMilliseconds).
+                </p>
+                <p>
+                    <button type="button"
+                            aria-expanded="@expanded.ToString().ToLowerInvariant()"
+                            aria-controls="@schoolsId"
+                            @onclick="() => Toggle(run.Id)">
+                        @(expanded ? "Hide" : "Show") schools in run @run.Id (@run.Items.Count)
+                    </button>
+                </p>
+                @if (expanded)
+                {
+                    <div id="@schoolsId">
+                        @if (run.Items.Count == 0)
+                        {
+                            <p>No school items were recorded for this run.</p>
+                        }
+                        else
+                        {
+                            <div class="table-wrap">
+                                <table>
+                                    <caption>School results for run @run.Id</caption>
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">School</th>
+                                            <th scope="col">Status</th>
+                                            <th scope="col">Message</th>
+                                            <th scope="col">Download</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var item in run.Items.OrderBy(row => row.School.Code))
+                                        {
+                                            <tr>
+                                                <td>@UiFormat.SchoolLabel(item.School.Code, item.School.Name)</td>
+                                                <td><StatusBadge Status="item.Status" /></td>
+                                                <td>@item.Message</td>
+                                                <td>
+                                                    @if (item.Status == RunStatus.Completed && !string.IsNullOrWhiteSpace(item.OutputPath))
+                                                    {
+                                                        <a href="@($"/downloads/reports/{item.Id}")">Download PDF for @item.School.Code</a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span>Not available</span>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private readonly List<ReportRun> _runs = [];
+    private readonly HashSet<int> _expandedRunIds = [];
+    private bool _loaded;
+    private string? _loadError;
+
+    private string? StatusMessage =>
+        _loadError
+        ?? (_loaded ? null : "Loading run history.");
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var runs = await Db.ReportRuns
+                .AsNoTracking()
+                .Include(run => run.Items)
+                .ThenInclude(item => item.School)
+                .OrderByDescending(run => run.Id)
+                .Take(50)
+                .ToListAsync();
+            _runs.AddRange(runs);
+        }
+        catch (Exception exception)
+        {
+            _loadError = exception.Message;
+        }
+
+        _loaded = true;
+    }
+
+    private void Toggle(int runId)
+    {
+        if (!_expandedRunIds.Add(runId))
+        {
+            _expandedRunIds.Remove(runId);
+        }
+    }
+}

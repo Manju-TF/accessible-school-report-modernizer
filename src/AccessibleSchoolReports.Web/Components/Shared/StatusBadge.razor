@@ -1,0 +1,10 @@
+<span class="status-badge status-@Tone" aria-label="@UiFormat.StatusAccessibleName(Status)">
+    <span class="status-text" aria-hidden="true">@UiFormat.Status(Status)</span>
+</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public RunStatus Status { get; set; }
+
+    private string Tone => UiFormat.StatusTone(Status);
+}

@@ -1,0 +1,339 @@
+@page "/generate-all"
+@rendermode InteractiveServer
+@inject SchoolReportsDbContext Db
+@inject IReportGenerationService Generation
+@inject IOptions<ReportGenerationOptions> GenerationOptions
+@inject IJSRuntime Js
+
+<PageTitle>Generate All</PageTitle>
+
+<h1>Generate All</h1>
+<p class="lede">Generate a summary PDF for every school that has graduate records. One failed school does not stop the others.</p>
+
+@if (_eligibleCount == 0 && _loadError is null)
+{
+    <p><a href="/import">Go to Import Data</a></p>
+}
+
+<form aria-label="Generate all school reports"
+      @onsubmit="GenerateAsync"
+      @onsubmit:preventDefault
+      aria-busy="@_busy.ToString().ToLowerInvariant()">
+    <div class="form-grid">
+        <fieldset>
+            <legend>Generation mode</legend>
+            <div class="choice-list">
+                <label class="choice">
+                    <input type="radio"
+                           name="generation-mode"
+                           value="sequential"
+                           checked="@(_mode == "sequential")"
+                           @onchange="OnModeChanged"
+                           disabled="@_busy"
+                           aria-label="Sequential — one school at a time" />
+                    <span aria-hidden="true">Sequential — one school at a time</span>
+                </label>
+                <label class="choice">
+                    <input type="radio"
+                           name="generation-mode"
+                           value="parallel"
+                           checked="@(_mode == "parallel")"
+                           @onchange="OnModeChanged"
+                           disabled="@_busy"
+                           aria-label="Parallel — bounded concurrency" />
+                    <span aria-hidden="true">Parallel — bounded concurrency</span>
+                </label>
+            </div>
+        </fieldset>
+        <div class="field">
+            <label for="max-parallelism">Maximum parallelism</label>
+            <input id="max-parallelism"
+                   type="number"
+                   min="@ReportGenerationOptions.MinMaxParallelism"
+                   max="@ReportGenerationOptions.MaxMaxParallelism"
+                   @bind="_maxParallelism"
+                   disabled="@(_busy || _mode != "parallel")"
+                   aria-describedby="max-parallelism-help" />
+            <p id="max-parallelism-help" class="hint">
+                Allowed range is @ReportGenerationOptions.MinMaxParallelism to @ReportGenerationOptions.MaxMaxParallelism.
+                Default is @ReportGenerationOptions.DefaultMaxParallelism.
+                Sequential mode always uses 1.
+            </p>
+        </div>
+        <div class="field">
+            <label for="all-report-year">Report year</label>
+            <input id="all-report-year"
+                   type="text"
+                   inputmode="numeric"
+                   maxlength="4"
+                   required
+                   aria-required="true"
+                   @bind="_classYear"
+                   aria-describedby="@YearDescribedBy"
+                   aria-invalid="@_yearInvalid.ToString().ToLowerInvariant()"
+                   aria-errormessage="generate-all-status"
+                   disabled="@_busy" />
+            <p id="all-report-year-help" class="hint">Four-digit year used for the output folder. PDF titles remain Class of 2025.</p>
+        </div>
+        <div class="actions">
+            <button type="submit" disabled="@(_busy || _eligibleCount == 0)">
+                @(_busy ? "Generating all reports" : "Generate all reports")
+            </button>
+            <button type="button"
+                    @ref="_cancelButton"
+                    @onclick="Cancel"
+                    disabled="@(!_busy)">
+                Cancel generation
+            </button>
+            <p id="eligible-help" class="hint">@_eligibleCount eligible @(_eligibleCount == 1 ? "school" : "schools"). This can take several minutes.</p>
+        </div>
+    </div>
+</form>
+
+<LiveStatus Id="generate-all-status" Tone="@_statusTone" Message="@_statusMessage" />
+
+@if (_busy || _progressTotal > 0)
+{
+    <div id="generation-progress-region" class="panel" tabindex="-1" @ref="_progressRegion">
+        <h2 id="generation-progress-heading">Progress</h2>
+        <progress id="generation-progress"
+                  aria-labelledby="generation-progress-heading"
+                  max="@Math.Max(1, _progressTotal)"
+                  value="@_progressCompleted">
+        </progress>
+        <p id="generation-progress-text">
+            @_progressCompleted of @_progressTotal completed.
+            Successful @_progressSuccessful.
+            Failed @_progressFailed.
+        </p>
+    </div>
+}
+
+@if (_result is not null)
+{
+    <section class="panel" aria-labelledby="generate-all-result-heading">
+        <h2 id="generate-all-result-heading" class="result-heading" tabindex="-1" @ref="_resultHeading">Run result</h2>
+        <p><StatusBadge Status="_result.Status" /></p>
+        <div class="card-grid">
+            <div class="card">
+                <h3>Total</h3>
+                <p class="metric">@_result.Total</p>
+            </div>
+            <div class="card">
+                <h3>Successful</h3>
+                <p class="metric">@_result.Successful</p>
+            </div>
+            <div class="card">
+                <h3>Failed</h3>
+                <p class="metric">@_result.Failed</p>
+            </div>
+            <div class="card">
+                <h3>Duration</h3>
+                <p class="metric">@UiFormat.Duration(_result.Duration)</p>
+            </div>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(_result.Message))
+        {
+            <p>@_result.Message</p>
+        }
+        @if (_result.Items.Any(item => item.Status == RunStatus.Failed))
+        {
+            <div class="table-wrap">
+                <table>
+                    <caption>Failed schools</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">School</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in _result.Items.Where(item => item.Status == RunStatus.Failed))
+                        {
+                            <tr>
+                                <td>@UiFormat.SchoolLabel(item.SchoolCode ?? item.SchoolId.ToString(), item.SchoolName)</td>
+                                <td><StatusBadge Status="item.Status" /></td>
+                                <td>@item.Message</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <p><a href="/runs">View this run in history</a></p>
+    </section>
+}
+
+@code {
+    private string _mode = "sequential";
+    private int _maxParallelism = ReportGenerationOptions.DefaultMaxParallelism;
+    private string _classYear = "2025";
+    private int _eligibleCount;
+    private bool _busy;
+    private bool _yearInvalid;
+    private string? _loadError;
+    private string? _statusMessage;
+    private string _statusTone = "info";
+    private AllSchoolReportGenerationResult? _result;
+    private ElementReference _resultHeading;
+    private ElementReference _cancelButton;
+    private ElementReference _progressRegion;
+    private bool _moveFocusToResult;
+    private bool _moveFocusToCancel;
+    private CancellationTokenSource? _cts;
+    private int _progressTotal;
+    private int _progressCompleted;
+    private int _progressSuccessful;
+    private int _progressFailed;
+
+    private string YearDescribedBy =>
+        _yearInvalid ? "all-report-year-help generate-all-status" : "all-report-year-help";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _classYear = GenerationOptions.Value.ClassYear;
+        try
+        {
+            _eligibleCount = await Db.Schools.CountAsync(
+                school => Db.GraduateRecords.Any(row => row.SchoolId == school.Id));
+            if (_eligibleCount == 0)
+            {
+                _statusTone = "warning";
+                _statusMessage = "No schools with graduate records are available. Import a workbook first.";
+            }
+        }
+        catch (Exception exception)
+        {
+            _loadError = exception.Message;
+            _statusTone = "error";
+            _statusMessage = exception.Message;
+        }
+    }
+
+    private void OnModeChanged(ChangeEventArgs args)
+    {
+        _mode = args.Value?.ToString() ?? "sequential";
+    }
+
+    private void Cancel() => _cts?.Cancel();
+
+    private async Task GenerateAsync()
+    {
+        if (_busy || _eligibleCount == 0)
+        {
+            return;
+        }
+
+        _yearInvalid = !IsValidYear(_classYear);
+        if (_yearInvalid)
+        {
+            _statusTone = "error";
+            _statusMessage = "Report year must be a four-digit year.";
+            await Js.InvokeVoidAsync("focusById", "all-report-year");
+            return;
+        }
+
+        if (_mode == "parallel"
+            && (_maxParallelism < ReportGenerationOptions.MinMaxParallelism
+                || _maxParallelism > ReportGenerationOptions.MaxMaxParallelism))
+        {
+            _statusTone = "error";
+            _statusMessage = $"Maximum parallelism must be between {ReportGenerationOptions.MinMaxParallelism} and {ReportGenerationOptions.MaxMaxParallelism}.";
+            return;
+        }
+
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _busy = true;
+        _progressTotal = _eligibleCount;
+        _progressCompleted = 0;
+        _progressSuccessful = 0;
+        _progressFailed = 0;
+        _statusTone = "info";
+        _statusMessage = _mode == "parallel"
+            ? $"Generating all reports in parallel with maximum parallelism {_maxParallelism}."
+            : "Generating all reports sequentially.";
+        _result = null;
+        _moveFocusToCancel = true;
+        await InvokeAsync(StateHasChanged);
+
+        var progress = new Progress<SchoolGenerationProgress>(update =>
+        {
+            _progressTotal = update.Total;
+            _progressCompleted = update.Completed;
+            _progressSuccessful = update.Successful;
+            _progressFailed = update.Failed;
+            _statusMessage = $"Generated {update.Completed} of {update.Total}. Successful {update.Successful}. Failed {update.Failed}.";
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            _result = _mode == "parallel"
+                ? await Generation.GenerateAllParallelAsync(
+                    _maxParallelism,
+                    _cts.Token,
+                    _classYear.Trim(),
+                    progress)
+                : await Generation.GenerateAllSequentialAsync(
+                    _cts.Token,
+                    _classYear.Trim(),
+                    progress);
+            _statusTone = UiFormat.StatusTone(_result.Status);
+            _statusMessage = $"Generate all {UiFormat.Status(_result.Status).ToLowerInvariant()}. Successful {_result.Successful} of {_result.Total}. Failed {_result.Failed}. Duration {UiFormat.Duration(_result.Duration)}.";
+            _progressCompleted = _result.Successful + _result.Failed;
+            _progressSuccessful = _result.Successful;
+            _progressFailed = _result.Failed;
+            _progressTotal = _result.Total;
+        }
+        catch (Exception exception)
+        {
+            _statusTone = "error";
+            _statusMessage = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+            _cts.Dispose();
+            _cts = null;
+        }
+
+        await InvokeAsync(StateHasChanged);
+        _moveFocusToResult = _result is not null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_moveFocusToCancel)
+        {
+            _moveFocusToCancel = false;
+            try
+            {
+                await _cancelButton.FocusAsync();
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        if (!_moveFocusToResult)
+        {
+            return;
+        }
+
+        _moveFocusToResult = false;
+        try
+        {
+            await _resultHeading.FocusAsync();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static bool IsValidYear(string? value) =>
+        !string.IsNullOrWhiteSpace(value)
+        && value.Trim().Length == 4
+        && value.Trim().All(char.IsAsciiDigit);
+}
