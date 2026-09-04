@@ -1,0 +1,381 @@
+@page "/knowledge-assistant"
+@attribute [Authorize(Policy = AppPolicies.RequireRagAccess)]
+@rendermode InteractiveServer
+@implements IDisposable
+@inject IKnowledgeAssistantService Assistant
+@inject IKnowledgeAssistantSession Session
+@inject AuthenticationStateProvider AuthenticationState
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
+
+<PageTitle>Knowledge Assistant</PageTitle>
+
+<h1>Knowledge Assistant</h1>
+<p class="lede">
+    Ask a question about authorized project documentation and generated school reports.
+    Answers use retrieved context only. The assistant does not calculate report totals.
+</p>
+
+@if (_reportContext is not null)
+{
+    <section class="panel" aria-labelledby="report-context-heading">
+        <h2 id="report-context-heading">Asking about this report</h2>
+        <p>
+            Retrieval is limited to the authorized report for
+            @UiFormat.SchoolLabel(_reportContext.SchoolCode, _reportContext.SchoolName).
+            @if (_reportContext.ReportYear is int year)
+            {
+                <span> Report year @year.</span>
+            }
+        </p>
+        <p>
+            <a href="/knowledge-assistant" @onclick="ClearReportContext" @onclick:preventDefault>Ask about all authorized knowledge</a>
+        </p>
+    </section>
+}
+
+<form aria-label="Ask the knowledge assistant"
+      @onsubmit="AskAsync"
+      @onsubmit:preventDefault
+      aria-busy="@_busy.ToString().ToLowerInvariant()">
+    <div class="form-grid assistant-form">
+        <div class="field">
+            <label for="assistant-question">Question</label>
+            <textarea id="assistant-question"
+                      rows="4"
+                      maxlength="@KnowledgeRetrievalOptions.MaxQuestionLength"
+                      required
+                      aria-required="true"
+                      aria-invalid="@_questionInvalid.ToString().ToLowerInvariant()"
+                      aria-errormessage="assistant-status"
+                      aria-describedby="@QuestionDescribedBy"
+                      @bind="_question"
+                      disabled="@_busy"></textarea>
+            <p id="assistant-question-help" class="hint">
+                @(_reportContext is null
+                    ? "Questions are answered from knowledge you are allowed to see. Unauthorized school or admin-only text is not retrieved."
+                    : "Questions are answered only from this authorized report. Other schools and global documents are not searched.")
+            </p>
+        </div>
+        <fieldset class="suggested-questions">
+            <legend>Suggested questions</legend>
+            <ul class="suggested-question-list">
+                @foreach (var suggestion in Suggestions)
+                {
+                    <li>
+                        <button type="button"
+                                class="button-secondary suggested-question"
+                                disabled="@_busy"
+                                @onclick="() => UseSuggestion(suggestion)">
+                            @suggestion
+                        </button>
+                    </li>
+                }
+            </ul>
+        </fieldset>
+        <div class="actions">
+            <button type="submit" disabled="@_busy">
+                @(_busy ? "Asking" : "Ask")
+            </button>
+            <button type="button"
+                    class="button-secondary"
+                    @ref="_cancelButton"
+                    @onclick="Cancel"
+                    disabled="@(!_busy)">
+                Cancel
+            </button>
+        </div>
+    </div>
+</form>
+
+<LiveStatus Id="assistant-status" Tone="@_statusTone" Message="@_statusMessage" />
+
+@if (_showInsufficient)
+{
+    <section class="panel" aria-labelledby="assistant-insufficient-heading">
+        <h2 id="assistant-insufficient-heading" class="result-heading" tabindex="-1" @ref="_resultHeading">Insufficient evidence</h2>
+        <p>There is not enough authorized project context to answer this question.</p>
+    </section>
+}
+else if (_answer is not null)
+{
+    <div class="assistant-output">
+    <section class="panel" aria-labelledby="assistant-answer-heading">
+        <h2 id="assistant-answer-heading" class="result-heading" tabindex="-1" @ref="_resultHeading">Answer</h2>
+        <p class="assistant-answer">@_answer</p>
+    </section>
+
+    <section class="panel" aria-labelledby="assistant-sources-heading">
+        <h2 id="assistant-sources-heading">Sources</h2>
+        <ol class="source-list">
+            @foreach (var source in _sources)
+            {
+                <li class="source-card">
+                    <h3>@KnowledgeSourceDisplay.DocumentName(source.FileName)</h3>
+                    <p class="hint">@KnowledgeSourceDisplay.DocumentKind(source.DocumentType)</p>
+                    <dl>
+                        <div>
+                            <dt>Rule ID</dt>
+                            <dd>@KnowledgeSourceDisplay.RuleId(source.RuleId)</dd>
+                        </div>
+                        <div>
+                            <dt>Source location</dt>
+                            <dd>@KnowledgeSourceDisplay.Location(source.SourceLocation)</dd>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(source.SchoolCode))
+                        {
+                            <div>
+                                <dt>School</dt>
+                                <dd>@source.SchoolCode</dd>
+                            </div>
+                        }
+                        @if (source.ReportYear is int year)
+                        {
+                            <div>
+                                <dt>Report year</dt>
+                                <dd>@year</dd>
+                            </div>
+                        }
+                    </dl>
+                </li>
+            }
+        </ol>
+    </section>
+    </div>
+}
+
+@code {
+    private static readonly string[] Suggestions =
+    [
+        "How is salary suppression handled?",
+        "How is median salary calculated?",
+        "Which SAS program generates the report?",
+        "Where is CF-S-00 documented?",
+        "Which rules are ambiguous?",
+        "Which rules appear to lack tests?",
+        "What does the generated report say about employment?",
+    ];
+
+    [SupplyParameterFromQuery(Name = "report")]
+    public int? ReportQuery { get; set; }
+
+    private KnowledgeReportContext? _reportContext;
+    private string _question = string.Empty;
+    private bool _busy;
+    private bool _questionInvalid;
+    private string? _statusMessage;
+    private string _statusTone = "info";
+    private string? _answer;
+    private bool _showInsufficient;
+    private IReadOnlyList<KnowledgeRetrievalHit> _sources = [];
+    private ElementReference _resultHeading;
+    private ElementReference _cancelButton;
+    private bool _moveFocusToResult;
+    private bool _moveFocusToCancel;
+    private CancellationTokenSource? _cts;
+
+    private string QuestionDescribedBy =>
+        _questionInvalid ? "assistant-question-help assistant-status" : "assistant-question-help";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var user = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+        if (ReportQuery is int requested)
+        {
+            if (!await Session.TrySelectReportAsync(user, requested))
+            {
+                _reportContext = null;
+                _statusTone = "error";
+                _statusMessage = "That report is not available.";
+                return;
+            }
+        }
+        else
+        {
+            Session.Clear();
+        }
+
+        _reportContext = Session.Context;
+    }
+
+    private void ClearReportContext()
+    {
+        Session.Clear();
+        _reportContext = null;
+        Navigation.NavigateTo("/knowledge-assistant");
+    }
+
+    private void UseSuggestion(string suggestion)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _question = suggestion;
+        _questionInvalid = false;
+    }
+
+    private void Cancel() => _cts?.Cancel();
+
+    private async Task AskAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _questionInvalid = string.IsNullOrWhiteSpace(_question)
+            || _question.Trim().Length > KnowledgeRetrievalOptions.MaxQuestionLength;
+        if (string.IsNullOrWhiteSpace(_question))
+        {
+            _statusTone = "error";
+            _statusMessage = "Enter a question before asking.";
+            _answer = null;
+            _sources = [];
+            _showInsufficient = false;
+            await Js.InvokeVoidAsync("focusById", "assistant-question");
+            return;
+        }
+
+        if (_question.Trim().Length > KnowledgeRetrievalOptions.MaxQuestionLength)
+        {
+            _statusTone = "error";
+            _statusMessage = $"Question must be {KnowledgeRetrievalOptions.MaxQuestionLength} characters or fewer.";
+            _answer = null;
+            _sources = [];
+            _showInsufficient = false;
+            await Js.InvokeVoidAsync("focusById", "assistant-question");
+            return;
+        }
+
+        _cts?.Dispose();
+        _cts = new CancellationTokenSource();
+        _busy = true;
+        _statusTone = "info";
+        _statusMessage = "Asking the knowledge assistant.";
+        _answer = null;
+        _sources = [];
+        _showInsufficient = false;
+        _moveFocusToCancel = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var user = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+            var reportId = _reportContext?.ReportId;
+            if (reportId is int scoped
+                && !await Session.TrySelectReportAsync(user, scoped, _cts.Token))
+            {
+                _reportContext = null;
+                _statusTone = "error";
+                _statusMessage = "That report is not available.";
+                return;
+            }
+
+            _reportContext = Session.Context;
+            var options = new KnowledgeRetrievalOptions
+            {
+                ReportId = Session.Context?.ReportId,
+            };
+            var result = await Assistant.AskAsync(
+                user,
+                _question.Trim(),
+                options,
+                _cts.Token);
+            _sources = result.Sources;
+            if (_sources.Count == 0)
+            {
+                _showInsufficient = true;
+                _answer = null;
+                _statusTone = "warning";
+                _statusMessage = "Insufficient evidence in authorized project context.";
+            }
+            else
+            {
+                _answer = string.IsNullOrWhiteSpace(result.Answer)
+                    ? "The assistant returned no answer text."
+                    : result.Answer;
+                _statusTone = "success";
+                _statusMessage = $"Answer ready. {_sources.Count} {(_sources.Count == 1 ? "source" : "sources")}.";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            _statusTone = "warning";
+            _statusMessage = "The question was cancelled.";
+            _answer = null;
+            _sources = [];
+            _showInsufficient = false;
+        }
+        catch (Exception exception)
+        {
+            _statusTone = "error";
+            _statusMessage = UserFacingError(exception);
+            _answer = null;
+            _sources = [];
+            _showInsufficient = false;
+        }
+        finally
+        {
+            _busy = false;
+            _cts.Dispose();
+            _cts = null;
+        }
+
+        await InvokeAsync(StateHasChanged);
+        _moveFocusToResult = _answer is not null || _showInsufficient;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_moveFocusToCancel)
+        {
+            _moveFocusToCancel = false;
+            try
+            {
+                await _cancelButton.FocusAsync();
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        if (!_moveFocusToResult)
+        {
+            return;
+        }
+
+        _moveFocusToResult = false;
+        try
+        {
+            await _resultHeading.FocusAsync();
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+    }
+
+    private static string UserFacingError(Exception exception) =>
+        exception switch
+        {
+            LanguageModelConfigurationException => "The language model is not configured.",
+            LanguageModelTimeoutException => "The language model timed out. Try again.",
+            LanguageModelProviderException { StatusCode: 429 } =>
+                "The language model is rate-limited. Wait a minute and try again.",
+            LanguageModelProviderException => "The language model could not complete the request.",
+            EmbeddingConfigurationException => "Embeddings are not configured.",
+            EmbeddingTimeoutException => "The embedding service timed out. Try again.",
+            EmbeddingProviderException { StatusCode: 429 } =>
+                "The embedding service is rate-limited. Wait a minute and try again.",
+            EmbeddingProviderException => "The embedding service could not complete the request.",
+            _ => "The assistant could not answer. Try again.",
+        };
+}

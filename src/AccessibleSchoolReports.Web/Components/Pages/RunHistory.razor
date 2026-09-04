@@ -1,6 +1,9 @@
 @page "/runs"
+@attribute [Authorize(Policy = AppPolicies.RequireReportAccess)]
 @rendermode InteractiveServer
 @inject SchoolReportsDbContext Db
+@inject IReportAuthorizationService Authorization
+@inject AuthenticationStateProvider AuthenticationState
 
 <PageTitle>Run History</PageTitle>
 
@@ -59,6 +62,7 @@ else if (_loaded && _runs.Count > 0)
                                             <th scope="col">Status</th>
                                             <th scope="col">Message</th>
                                             <th scope="col">Download</th>
+                                            <th scope="col">Report</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -81,6 +85,9 @@ else if (_loaded && _runs.Count > 0)
                                                     {
                                                         <span>Not available</span>
                                                     }
+                                                </td>
+                                                <td>
+                                                    <a href="@($"/reports/{item.Id}")">Report details for @UiFormat.SchoolLabel(item.School.Code, item.School.Name)</a>
                                                 </td>
                                             </tr>
                                         }
@@ -109,6 +116,8 @@ else if (_loaded && _runs.Count > 0)
     {
         try
         {
+            var user = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+            var allowed = await Authorization.GetAccessibleSchoolIdsAsync(user);
             var runs = await Db.ReportRuns
                 .AsNoTracking()
                 .Include(run => run.Items)
@@ -116,7 +125,20 @@ else if (_loaded && _runs.Count > 0)
                 .OrderByDescending(run => run.Id)
                 .Take(50)
                 .ToListAsync();
-            _runs.AddRange(runs);
+            foreach (var run in runs)
+            {
+                var visible = run.Items.Where(item => allowed.Contains(item.SchoolId)).ToList();
+                run.Items.Clear();
+                foreach (var item in visible)
+                {
+                    run.Items.Add(item);
+                }
+
+                if (run.Items.Count > 0)
+                {
+                    _runs.Add(run);
+                }
+            }
         }
         catch (Exception exception)
         {

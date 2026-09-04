@@ -1,29 +1,76 @@
 <nav class="site-nav" aria-label="Main">
     <ul class="nav-list">
-        <li>
-            <NavLink href="/" Match="NavLinkMatch.All">
-                Dashboard<span class="visually-hidden current-only"> (current page)</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/import">
-                Import Data<span class="visually-hidden current-only"> (current page)</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/generate">
-                Generate Report<span class="visually-hidden current-only"> (current page)</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/generate-all">
-                Generate All<span class="visually-hidden current-only"> (current page)</span>
-            </NavLink>
-        </li>
-        <li>
-            <NavLink href="/runs">
-                Run History<span class="visually-hidden current-only"> (current page)</span>
-            </NavLink>
-        </li>
+        <AuthorizeView Policy="@AppPolicies.RequireReportAccess">
+            <Authorized>
+                <li>
+                    <NavLink href="/" Match="NavLinkMatch.All">
+                        Dashboard<span class="visually-hidden current-only"> (current page)</span>
+                    </NavLink>
+                </li>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Policy="@AppPolicies.RequireAdmin">
+            <Authorized>
+                <li>
+                    <NavLink href="/import">
+                        Import<span class="visually-hidden current-only"> (current page)</span>
+                    </NavLink>
+                </li>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Policy="@AppPolicies.RequireReportGeneration">
+            <Authorized>
+                <li>
+                    <NavLink href="/generate">
+                        Generate<span class="visually-hidden current-only"> (current page)</span>
+                    </NavLink>
+                </li>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Policy="@AppPolicies.RequireAdmin">
+            <Authorized>
+                <li>
+                    <NavLink href="/generate-all">
+                        Generate all<span class="visually-hidden current-only"> (current page)</span>
+                    </NavLink>
+                </li>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Policy="@AppPolicies.RequireReportAccess">
+            <Authorized>
+                <li>
+                    <NavLink href="/runs">
+                        History<span class="visually-hidden current-only"> (current page)</span>
+                    </NavLink>
+                </li>
+            </Authorized>
+        </AuthorizeView>
+        <AuthorizeView Policy="@AppPolicies.RequireRagAccess">
+            <Authorized>
+                <li>
+                    <NavLink href="/knowledge-assistant">
+                        Assistant<span class="visually-hidden current-only"> (current page)</span>
+                    </NavLink>
+                </li>
+            </Authorized>
+        </AuthorizeView>
     </ul>
+    <div class="nav-account">
+        <AuthorizeView>
+            <Authorized>
+                <p class="nav-user">
+                    <span class="nav-user-prefix">Signed in as </span>@context.User.Identity?.Name
+                </p>
+                <form method="post" action="/account/signout">
+                    <AntiforgeryToken />
+                    <button type="submit" class="nav-signout">Sign out</button>
+                </form>
+            </Authorized>
+            <NotAuthorized>
+                <NavLink href="/signin">
+                    Sign in<span class="visually-hidden current-only"> (current page)</span>
+                </NavLink>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
 </nav>

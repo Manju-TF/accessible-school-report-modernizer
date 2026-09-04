@@ -43,6 +43,29 @@ public sealed class ReportFileAccessTests
     }
 
     [Fact]
+    public void TryResolveDownloadPath_RejectsTraversalInStoredPath()
+    {
+        var root = CreateTempRoot();
+        var outside = Path.Combine(Path.GetTempPath(), "asr-traversal-" + Guid.NewGuid().ToString("N"), "secret.pdf");
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(outside)!);
+            File.WriteAllText(outside, "%PDF");
+
+            var traversed = Path.Combine(root, "..", Path.GetFileName(Path.GetDirectoryName(outside)!), "secret.pdf");
+            Assert.False(ReportFileAccess.TryResolveStoredPdfPath(traversed, root, out _));
+            Assert.False(ReportFileAccess.TryResolveDownloadPath(@"..\..\Windows\win.ini", root, out _));
+            Assert.False(ReportFileAccess.TryResolveDownloadPath("../secret.pdf", root, out _));
+            Assert.False(ReportFileAccess.TryResolveDownloadPath("2025/../secret.pdf", root, out _));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(Path.GetDirectoryName(outside)!, recursive: true);
+        }
+    }
+
+    [Fact]
     public void TryResolveDownloadPath_RejectsNonPdfAndMissingFile()
     {
         var root = CreateTempRoot();

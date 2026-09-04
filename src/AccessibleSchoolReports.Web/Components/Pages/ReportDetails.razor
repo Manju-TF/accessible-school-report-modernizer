@@ -1,0 +1,141 @@
+@page "/reports/{Id:int}"
+@attribute [Authorize(Policy = AppPolicies.RequireReportAccess)]
+@rendermode InteractiveServer
+@inject SchoolReportsDbContext Db
+@inject IReportAuthorizationService Authorization
+@inject IKnowledgeAssistantSession AssistantSession
+@inject AuthenticationStateProvider AuthenticationState
+@inject NavigationManager Navigation
+
+<PageTitle>@(_found ? "Report" : "Report not found")</PageTitle>
+
+@if (!_loaded)
+{
+    <LiveStatus Tone="info" Message="Loading report." />
+}
+else if (!_found || _item is null)
+{
+    <h1>Report not found</h1>
+    <p class="lede">That report is not available.</p>
+    <p><a href="/runs">Return to run history</a></p>
+}
+else
+{
+    <h1>Report</h1>
+    <p class="lede">Authorized summary for @UiFormat.SchoolLabel(_item.School.Code, _item.School.Name).</p>
+
+    <section class="panel" aria-labelledby="report-details-heading">
+        <h2 id="report-details-heading">Details</h2>
+        <dl>
+            <div>
+                <dt>School</dt>
+                <dd>@UiFormat.SchoolLabel(_item.School.Code, _item.School.Name)</dd>
+            </div>
+            <div>
+                <dt>Status</dt>
+                <dd><StatusBadge Status="_item.Status" /></dd>
+            </div>
+            @if (_reportYear is int year)
+            {
+                <div>
+                    <dt>Report year</dt>
+                    <dd>@year</dd>
+                </div>
+            }
+            <div>
+                <dt>Started</dt>
+                <dd>@UiFormat.Utc(_item.StartedUtc)</dd>
+            </div>
+            <div>
+                <dt>Completed</dt>
+                <dd>@UiFormat.Utc(_item.CompletedUtc)</dd>
+            </div>
+        </dl>
+        @if (_item.Status == RunStatus.Completed && !string.IsNullOrWhiteSpace(_item.OutputPath))
+        {
+            <p>
+                <a class="button"
+                   href="@($"/downloads/reports/{_item.Id}/{_item.School.Code}-summary-report.pdf")"
+                   download="@($"{_item.School.Code}-summary-report.pdf")"
+                   target="_blank"
+                   rel="noopener"
+                   data-enhance-nav="false">Download PDF for @UiFormat.SchoolLabel(_item.School.Code, _item.School.Name)</a>
+            </p>
+        }
+        <p>
+            <button type="button" @onclick="AskAboutReportAsync">Ask about this report</button>
+        </p>
+    </section>
+}
+
+<LiveStatus Id="report-details-status" Tone="@_statusTone" Message="@_statusMessage" />
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private bool _loaded;
+    private bool _found;
+    private ReportRunItem? _item;
+    private int? _reportYear;
+    private string? _statusMessage;
+    private string _statusTone = "info";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loaded = false;
+        _found = false;
+        _item = null;
+        _reportYear = null;
+        _statusMessage = null;
+        try
+        {
+            var user = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+            if (!await Authorization.CanViewReportAsync(user, Id))
+            {
+                _found = false;
+                return;
+            }
+
+            _item = await Db.ReportRunItems
+                .AsNoTracking()
+                .Include(item => item.School)
+                .FirstOrDefaultAsync(item => item.Id == Id);
+            if (_item?.School is null)
+            {
+                _found = false;
+                return;
+            }
+
+            _reportYear = await Db.KnowledgeDocuments
+                .AsNoTracking()
+                .Where(document => document.ReportId == Id)
+                .Select(document => document.ReportYear)
+                .FirstOrDefaultAsync();
+            _found = true;
+        }
+        catch (Exception)
+        {
+            _found = false;
+            _statusTone = "error";
+            _statusMessage = "The report could not be loaded.";
+        }
+        finally
+        {
+            _loaded = true;
+        }
+    }
+
+    private async Task AskAboutReportAsync()
+    {
+        var user = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+        if (!await AssistantSession.TrySelectReportAsync(user, Id))
+        {
+            _found = false;
+            _item = null;
+            return;
+        }
+
+        Navigation.NavigateTo($"/knowledge-assistant?report={Id}");
+    }
+}

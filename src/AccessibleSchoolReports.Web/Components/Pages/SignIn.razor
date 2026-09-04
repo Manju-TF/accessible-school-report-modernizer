@@ -1,0 +1,55 @@
+@page "/signin"
+@attribute [AllowAnonymous]
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in</PageTitle>
+
+<section class="panel auth-card">
+    <h1>Sign in</h1>
+    <p class="lede">
+        Use your local account to open school reports and the knowledge assistant.
+    </p>
+
+    @if (_failed)
+    {
+        <LiveStatus Tone="error" Message="The user name or password is not correct." />
+    }
+
+    <form method="post" action="/account/signin" aria-label="Sign in">
+        <AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@_returnUrl" />
+        <div class="form-grid">
+            <div class="field">
+                <label for="username">User name</label>
+                <input id="username" name="username" type="text" autocomplete="username" required />
+            </div>
+            <div class="field">
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" required />
+            </div>
+            <div class="actions">
+                <button type="submit">Sign in</button>
+            </div>
+        </div>
+    </form>
+</section>
+
+@code {
+    private bool _failed;
+    private string _returnUrl = "/";
+
+    protected override void OnInitialized()
+    {
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+        _failed = query.TryGetValue("error", out var error) && error == "1";
+        if (query.TryGetValue("returnUrl", out var returnUrl) && !string.IsNullOrWhiteSpace(returnUrl))
+        {
+            var candidate = returnUrl.ToString();
+            if (candidate.StartsWith('/') && !candidate.StartsWith("//", StringComparison.Ordinal))
+            {
+                _returnUrl = candidate;
+            }
+        }
+    }
+}

@@ -1,8 +1,14 @@
+using System.Security.Claims;
+using AccessibleSchoolReports.Application.Knowledge;
 using AccessibleSchoolReports.Application.Reporting;
+using AccessibleSchoolReports.Application.Security;
 using AccessibleSchoolReports.Domain.Entities;
+using AccessibleSchoolReports.Domain.Knowledge;
 using AccessibleSchoolReports.Domain.Persistence;
+using AccessibleSchoolReports.Infrastructure.Knowledge;
 using AccessibleSchoolReports.Infrastructure.Pdf;
 using AccessibleSchoolReports.Infrastructure.Reporting;
+using AccessibleSchoolReports.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -42,6 +48,13 @@ public sealed class ReportGenerationServiceTests
         Assert.Equal(expectedPath, item.OutputPath);
         Assert.NotNull(item.StartedUtc);
         Assert.NotNull(item.CompletedUtc);
+
+        var knowledge = await db.Context.KnowledgeDocuments.Include(row => row.Chunks).SingleAsync();
+        Assert.Equal(item.Id, knowledge.ReportId);
+        Assert.Equal(school.Id, knowledge.SchoolId);
+        Assert.Equal("10701", knowledge.SchoolCode);
+        Assert.Equal(KnowledgeAuthorizationScope.Report, knowledge.AuthorizationScope);
+        Assert.NotEmpty(knowledge.Chunks);
     }
 
     [Fact]
@@ -418,12 +431,44 @@ public sealed class ReportGenerationServiceTests
         string outputRoot,
         IAccessiblePdfGenerator? pdf = null)
     {
+        var options = Options.Create(new ReportGenerationOptions { OutputRoot = outputRoot });
         return new ReportGenerationService(
             db.Context,
             db.CreateFactory(),
             new SchoolReportCalculator(),
             pdf ?? new QuestPdfAccessiblePdfGenerator(),
-            Options.Create(new ReportGenerationOptions { OutputRoot = outputRoot }));
+            new ReportAuthorizationService(db.Context),
+            new PdfKnowledgeIngestionService(
+                db.CreateFactory(),
+                new PdfPigTextExtractor(),
+                options),
+            new NoopKnowledgeEmbeddingIndex(),
+            new StaticCurrentUserAccessor(AdminPrincipal()),
+            options);
+    }
+
+    private static ClaimsPrincipal AdminPrincipal() =>
+        new(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, "integration-admin"),
+                new Claim(ClaimTypes.Name, "integration-admin"),
+                new Claim(ClaimTypes.Role, AppRoles.Admin),
+            ],
+            "test"));
+
+    private sealed class StaticCurrentUserAccessor : ICurrentUserAccessor
+    {
+        public StaticCurrentUserAccessor(ClaimsPrincipal user) => User = user;
+
+        public ClaimsPrincipal User { get; }
+    }
+
+    private sealed class NoopKnowledgeEmbeddingIndex : IKnowledgeEmbeddingIndexService
+    {
+        public Task<KnowledgeIndexResult> IndexPendingEmbeddingsAsync(
+            ClaimsPrincipal user,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new KnowledgeIndexResult());
     }
 
     private static async Task<School> SeedSchoolAsync(

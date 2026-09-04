@@ -1,6 +1,22 @@
 ﻿<Router AppAssembly="typeof(Program).Assembly">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+            <NotAuthorized>
+                <AuthorizeView>
+                    <Authorized Context="authorized">
+                        <LayoutView Layout="typeof(MainLayout)">
+                            <PageTitle>Access denied</PageTitle>
+                            <h1>Access denied</h1>
+                            <p class="lede">Your account does not have permission to use that page.</p>
+                            <p><a href="/">Return to the dashboard</a></p>
+                        </LayoutView>
+                    </Authorized>
+                    <NotAuthorized Context="anonymous">
+                        <RedirectToSignIn />
+                    </NotAuthorized>
+                </AuthorizeView>
+            </NotAuthorized>
+        </AuthorizeRouteView>
     </Found>
     <NotFound>
         <LayoutView Layout="typeof(MainLayout)">

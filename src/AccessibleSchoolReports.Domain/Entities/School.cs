@@ -11,4 +11,8 @@ public sealed class School
     public ICollection<GraduateRecord> Graduates { get; } = new List<GraduateRecord>();
 
     public ICollection<ReportRunItem> ReportRunItems { get; } = new List<ReportRunItem>();
+
+    public ICollection<UserSchoolAccess> UserAccess { get; } = new List<UserSchoolAccess>();
+
+    public ICollection<KnowledgeDocument> KnowledgeDocuments { get; } = new List<KnowledgeDocument>();
 }

@@ -26,4 +26,6 @@ public sealed class ReportRunItem
     public DateTimeOffset? StartedUtc { get; set; }
 
     public DateTimeOffset? CompletedUtc { get; set; }
+
+    public ICollection<KnowledgeDocument> KnowledgeDocuments { get; } = new List<KnowledgeDocument>();
 }
