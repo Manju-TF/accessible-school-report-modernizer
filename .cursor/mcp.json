@@ -5,6 +5,14 @@
       "headers": {
         "Authorization": "Bearer ${env:GITHUB_PAT}"
       }
+    },
+    "sqlite": {
+      "type": "stdio",
+      "command": "C:/Program Files/nodejs/node.exe",
+      "args": [
+        "--experimental-sqlite",
+        "C:/Users/104046/Desktop/AccessibleSchoolReportModernizer/scripts/mcp-sqlite-readonly.mjs"
+      ]
     }
   }
 }

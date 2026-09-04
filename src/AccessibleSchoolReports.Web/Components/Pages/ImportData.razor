@@ -1,0 +1,186 @@
+@page "/import"
+@rendermode InteractiveServer
+@inject IGraduateImportService ImportService
+@inject IJSRuntime Js
+
+<PageTitle>Import Data</PageTitle>
+
+<h1>Import Data</h1>
+<p class="lede">Upload a graduate Excel workbook. The importer validates required columns and stores accepted rows in SQLite.</p>
+
+<form aria-label="Import graduate workbook"
+      @onsubmit="ImportAsync"
+      @onsubmit:preventDefault
+      aria-busy="@_busy.ToString().ToLowerInvariant()">
+    <div class="form-grid">
+        <div class="field">
+            <label for="import-file">
+                <span aria-hidden="true">Excel workbook</span>
+            </label>
+            <InputFile id="import-file"
+                       OnChange="OnFileSelected"
+                       accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                       required="required"
+                       aria-label="Excel workbook"
+                       aria-required="true"
+                       aria-invalid="@_fileInvalid.ToString().ToLowerInvariant()"
+                       aria-describedby="@FileDescribedBy"
+                       aria-errormessage="import-status" />
+            <p id="import-file-help" class="hint">Accepted format: .xlsx. Maximum size: 10 MB.</p>
+            <p id="import-file-selected" class="hint">
+                @(_selectedFileName is null ? "No file selected." : $"Selected file: {_selectedFileName}")
+            </p>
+        </div>
+        <div class="actions">
+            <button type="submit" disabled="@_busy">@(_busy ? "Importing" : "Import")</button>
+        </div>
+    </div>
+</form>
+
+<LiveStatus Id="import-status" Tone="@_statusTone" Message="@_statusMessage" />
+
+@if (_result is not null)
+{
+    <section class="panel" aria-labelledby="import-result-heading">
+        <h2 id="import-result-heading" class="result-heading" tabindex="-1" @ref="_resultHeading">Import result</h2>
+        <p><StatusBadge Status="_result.Status" /></p>
+        <dl>
+            <div><dt>Imported rows</dt><dd>@_result.ImportedRowCount</dd></div>
+            <div><dt>Invalid rows</dt><dd>@_result.InvalidRowCount</dd></div>
+            <div><dt>Blank rows</dt><dd>@_result.BlankRowCount</dd></div>
+        </dl>
+        @if (!_result.WasDuplicate && !string.IsNullOrWhiteSpace(_result.Message))
+        {
+            <p>@_result.Message</p>
+        }
+        @if (_result.Issues.Count > 0)
+        {
+            <div class="table-wrap">
+                <table>
+                    <caption>Validation issues (@_result.Issues.Count)</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Row</th>
+                            <th scope="col">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var issue in _result.Issues.Take(100))
+                        {
+                            <tr>
+                                <td>@issue.RowNumber</td>
+                                <td>@issue.Reason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if (_result.Issues.Count > 100)
+            {
+                <p>Showing the first 100 of @_result.Issues.Count issues.</p>
+            }
+        }
+    </section>
+}
+
+@code {
+    private const long MaxFileBytes = 10 * 1024 * 1024;
+    private IBrowserFile? _file;
+    private string? _selectedFileName;
+    private bool _busy;
+    private bool _fileInvalid;
+    private string? _statusMessage;
+    private string _statusTone = "info";
+    private GraduateImportResult? _result;
+    private ElementReference _resultHeading;
+    private bool _moveFocusToResult;
+
+    private string FileDescribedBy =>
+        _fileInvalid ? "import-file-help import-file-selected import-status" : "import-file-help import-file-selected";
+
+    private void OnFileSelected(InputFileChangeEventArgs args)
+    {
+        _file = args.File;
+        _selectedFileName = args.File.Name;
+        _fileInvalid = false;
+        _statusMessage = null;
+        _result = null;
+    }
+
+    private async Task ImportAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        if (_file is null)
+        {
+            _fileInvalid = true;
+            _statusTone = "error";
+            _statusMessage = "Choose an Excel workbook before importing.";
+            await Js.InvokeVoidAsync("focusById", "import-file");
+            return;
+        }
+
+        if (!_file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+        {
+            _fileInvalid = true;
+            _statusTone = "error";
+            _statusMessage = "The selected file must be an .xlsx workbook.";
+            await Js.InvokeVoidAsync("focusById", "import-file");
+            return;
+        }
+
+        _fileInvalid = false;
+        _busy = true;
+        _statusTone = "info";
+        _statusMessage = $"Importing {_file.Name}.";
+        _result = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await using var stream = _file.OpenReadStream(MaxFileBytes);
+            _result = await ImportService.ImportAsync(stream, _file.Name);
+            _statusTone = UiFormat.StatusTone(_result.Status);
+            _statusMessage = _result.WasDuplicate
+                ? _result.Message ?? "This file was already imported."
+                : $"Import {UiFormat.Status(_result.Status).ToLowerInvariant()}. Imported {_result.ImportedRowCount} rows.";
+        }
+        catch (IOException)
+        {
+            _statusTone = "error";
+            _statusMessage = "The file is larger than 10 MB or could not be read.";
+        }
+        catch (Exception exception)
+        {
+            _statusTone = "error";
+            _statusMessage = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        await InvokeAsync(StateHasChanged);
+        _moveFocusToResult = _result is not null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_moveFocusToResult)
+        {
+            return;
+        }
+
+        _moveFocusToResult = false;
+        try
+        {
+            await _resultHeading.FocusAsync();
+        }
+        catch (Exception)
+        {
+        }
+    }
+}

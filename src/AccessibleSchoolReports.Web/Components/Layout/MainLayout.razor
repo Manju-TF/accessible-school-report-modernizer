@@ -1,9 +1,22 @@
 ﻿@inherits LayoutComponentBase
 
-@Body
+<div class="app-shell">
+    <header class="site-header">
+        <a class="skip-link" href="#main-content">Skip to main content</a>
+        <div class="site-brand">
+            <p class="site-name">School Employment Reports</p>
+            <p class="site-tagline">Import graduate data and generate school summary PDFs</p>
+        </div>
+        <NavMenu />
+    </header>
+
+    <main id="main-content" class="site-main" tabindex="-1">
+        @Body
+    </main>
+</div>
 
 <div id="blazor-error-ui">
     An unhandled error has occurred.
     <a href="" class="reload">Reload</a>
-    <a class="dismiss">🗙</a>
+    <a href="" class="dismiss" aria-label="Dismiss error message">Dismiss</a>
 </div>

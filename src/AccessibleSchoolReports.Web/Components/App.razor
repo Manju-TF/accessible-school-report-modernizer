@@ -5,14 +5,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="AccessibleSchoolReports.Web.styles.css" />
-    <HeadOutlet />
+    <HeadOutlet @rendermode="InteractiveServer" />
 </head>
 
 <body>
     <Routes />
     <script src="_framework/blazor.web.js"></script>
+    <script>
+        window.focusById = function (id) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.focus();
+            }
+        };
+    </script>
 </body>
 
 </html>

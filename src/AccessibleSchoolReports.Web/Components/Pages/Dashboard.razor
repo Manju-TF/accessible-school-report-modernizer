@@ -1,0 +1,125 @@
+@page "/"
+@rendermode InteractiveServer
+@inject SchoolReportsDbContext Db
+
+<PageTitle>Dashboard</PageTitle>
+
+<h1>Dashboard</h1>
+<p class="lede">Current database contents and the most recent import and report activity.</p>
+
+@if (_loadError is not null)
+{
+    <LiveStatus Tone="error" Message="@_loadError" />
+}
+else if (!_loaded)
+{
+    <LiveStatus Tone="info" Message="Loading dashboard." />
+}
+else
+{
+    <div class="card-grid">
+        <section class="card" aria-labelledby="db-status-heading">
+            <h2 id="db-status-heading">Database status</h2>
+            <p class="metric">@_databaseStatus</p>
+            <p class="metric-note">@_databaseDetail</p>
+        </section>
+        <section class="card" aria-labelledby="school-count-heading">
+            <h2 id="school-count-heading">Schools</h2>
+            <p class="metric">@_schoolCount</p>
+            <p class="metric-note">Schools stored after import</p>
+        </section>
+        <section class="card" aria-labelledby="graduate-count-heading">
+            <h2 id="graduate-count-heading">Graduates</h2>
+            <p class="metric">@_graduateCount</p>
+            <p class="metric-note">Graduate records stored after import</p>
+        </section>
+    </div>
+
+    <section class="panel" aria-labelledby="last-import-heading">
+        <h2 id="last-import-heading">Last import</h2>
+        @if (_lastImport is null)
+        {
+            <p>No import has been run yet. Use <a href="/import">Import Data</a> to load an Excel workbook.</p>
+        }
+        else
+        {
+            <p>
+                <StatusBadge Status="_lastImport.Status" />
+                @_lastImport.FileName
+            </p>
+            <p>
+                Started @UiFormat.Utc(_lastImport.StartedUtc).
+                Imported @_lastImport.ImportedRowCount rows.
+                Invalid @_lastImport.InvalidRowCount.
+                Blank @_lastImport.BlankRowCount.
+            </p>
+        }
+    </section>
+
+    <section class="panel" aria-labelledby="last-run-heading">
+        <h2 id="last-run-heading">Last report run</h2>
+        @if (_lastRun is null)
+        {
+            <p>No report has been generated yet. Use <a href="/generate">Generate Report</a> or <a href="/generate-all">Generate All</a>.</p>
+        }
+        else
+        {
+            <p>
+                <StatusBadge Status="_lastRun.Status" />
+                @UiFormat.Mode(_lastRun.Mode)
+            </p>
+            <p>
+                Started @UiFormat.Utc(_lastRun.StartedUtc).
+                Total @_lastRun.TotalCount.
+                Successful @_lastRun.SuccessfulCount.
+                Failed @_lastRun.FailedCount.
+                Duration @UiFormat.Duration(_lastRun.DurationMilliseconds).
+            </p>
+            <p><a href="/runs">View run history</a></p>
+        }
+    </section>
+}
+
+@code {
+    private bool _loaded;
+    private string? _loadError;
+    private string _databaseStatus = "Unknown";
+    private string _databaseDetail = string.Empty;
+    private int _schoolCount;
+    private int _graduateCount;
+    private ImportRun? _lastImport;
+    private ReportRun? _lastRun;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var canConnect = await Db.Database.CanConnectAsync();
+            _databaseStatus = canConnect ? "Connected" : "Unavailable";
+            _databaseDetail = canConnect
+                ? "SQLite is reachable and migrations have been applied."
+                : "The application could not open the SQLite database.";
+            if (canConnect)
+            {
+                _schoolCount = await Db.Schools.CountAsync();
+                _graduateCount = await Db.GraduateRecords.CountAsync();
+                _lastImport = await Db.ImportRuns
+                    .AsNoTracking()
+                    .OrderByDescending(run => run.Id)
+                    .FirstOrDefaultAsync();
+                _lastRun = await Db.ReportRuns
+                    .AsNoTracking()
+                    .OrderByDescending(run => run.Id)
+                    .FirstOrDefaultAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            _loadError = exception.Message;
+            _databaseStatus = "Unavailable";
+            _databaseDetail = "The dashboard could not read the database.";
+        }
+
+        _loaded = true;
+    }
+}
