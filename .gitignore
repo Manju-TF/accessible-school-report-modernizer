@@ -17,3 +17,4 @@ secrets.json
 **/secrets.json
 appsettings.Local.json
 **/appsettings.*.local.json
+legacy/

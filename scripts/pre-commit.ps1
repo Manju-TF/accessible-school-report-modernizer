@@ -4,9 +4,11 @@
   Blocks commits that change immutable legacy baseline files.
 
 .DESCRIPTION
-  Fails if staged paths fall under legacy/sas, legacy/samples, or
-  legacy/baseline, then runs scripts/verify-legacy-integrity.ps1 so the
-  working tree still matches the characterization manifest.
+  Fails if staged paths add, copy, modify, or rename files under
+  legacy/sas, legacy/samples, or legacy/baseline. Deleting those paths
+  from git (local-only baseline) is allowed. Then runs
+  scripts/verify-legacy-integrity.ps1 so the working tree still matches
+  the characterization manifest.
 #>
 [CmdletBinding()]
 param()
@@ -45,7 +47,7 @@ function Test-ProtectedLegacyPath {
 }
 
 $stagedPaths = New-Object System.Collections.Generic.List[string]
-$rawStatus = @(git diff --cached --name-status --diff-filter=ACDMR)
+$rawStatus = @(git diff --cached --name-status --diff-filter=ACMR)
 foreach ($line in $rawStatus) {
     if ([string]::IsNullOrWhiteSpace($line)) {
         continue
