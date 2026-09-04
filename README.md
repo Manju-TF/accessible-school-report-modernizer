@@ -180,11 +180,11 @@ MCP is a development aid. It is not a production API and not a substitute for `d
 | **Characterization tests** | `tests/AccessibleSchoolReports.CharacterizationTests` lock observed SAS maps in `LegacyRules` and baseline expected values. The project references **Domain only** and does **not** run `SchoolReportCalculator`. Eighteen items stay skipped because the SAS is ambiguous. Live calculator coverage is in the unit project. |
 | **Unit tests** | Calculator, recodes, layout, PDF bytes/text/tags, import parser, file-access, UI formatters. PDF tests assert structure markers (`/StructTreeRoot`, `/Lang`, `pdfuaid`). They are **not** named “PDF is accessible.” |
 | **Integration tests** | SQLite create/migrate, Excel import (including the sample workbook), single-school generate, sequential generate-all, parallel generate-all. |
-| **GitHub Actions** | `.github/workflows/quality.yml` restores, builds Release, and runs `dotnet test` on **pushes to `main`** and on **pull requests**. Pushes to other branches do not trigger it. |
+| **GitHub Actions** | `.github/workflows/quality.yml` restores, builds Release, and runs `dotnet test` on **pushes to `main`** and on **pull requests**, excluding `LegacyModernParityTests`. Pushes to other branches do not trigger it. |
 | **Legacy integrity guard** | `scripts/pre-commit.ps1` refuses commits that stage `legacy/sas`, `legacy/samples`, or `legacy/baseline`, then checks SHA-256 values in `docs/capstone/legacy-baseline.md`. |
 | **Playwright accessibility testing** | **Not automated.** Playwright MCP was used for a manual UI review. Findings are listed as problems in `docs/accessibility/ui-accessibility-review.md`. That document is not a WCAG pass. There is no Playwright CI job. |
 
-`dotnet test` on the full solution **fails** one integration test: `LegacyModernParityTests`. It compares Test University baseline PDF totals (100 graduates) to a school from the sample workbook (for example `23306`, 31 graduates). That is a subject mismatch. Do not change the calculator to chase those numbers. Details: `evidence/test-results/parity-results.md` and `evidence/test-results/final-quality-report.md`.
+A full local `dotnet test` on the solution **fails** one integration test: `LegacyModernParityTests`. It compares Test University baseline PDF totals (100 graduates) to a school from the sample workbook (for example `23306`, 31 graduates). That is a subject mismatch. Do not change the calculator to chase those numbers. CI uses the same filter as the integration command below. Details: `evidence/test-results/parity-results.md` and `evidence/test-results/final-quality-report.md`.
 
 A solution run **recorded on 4 September 2026** in `evidence/test-results/final-quality-report.md`: **322 passed**, **1 failed** (parity), **19 skipped**. Later commits added more unit tests; treat those totals as that report’s snapshot, not a live count.
 
@@ -199,7 +199,7 @@ AI output was not treated as accepted.
 **Pull request review** ([PR #2](https://github.com/Manju-TF/accessible-school-report-modernizer/pull/2), merged to `main`):
 
 - Calculator, layout, and tagged-PDF targeting were accepted for the capstone merge.
-- Quality CI staying red because of the parity test was called out explicitly.
+- Quality CI staying red because of the parity test was called out on that PR. CI now excludes that one test; the calculator is unchanged.
 - `/downloads/reports/{id}` is unauthenticated — acceptable for a local MVP, not a protected file store.
 - Generated PDFs must not be described as accessible without veraPDF / PAC / screen-reader evidence.
 

@@ -9,3 +9,5 @@ obj/
 data/reports/
 data/*.db
 output/
+.github/copilot-instructions.md
+evidence/screenshots/
