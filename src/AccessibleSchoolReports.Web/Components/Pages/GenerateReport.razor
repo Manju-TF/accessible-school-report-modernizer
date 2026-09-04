@@ -80,7 +80,12 @@
         @if (_result.Status == RunStatus.Completed && _result.ReportRunItemId is int itemId)
         {
             <p>
-                <a class="button" href="@($"/downloads/reports/{itemId}")">Download PDF for school @(_result.SchoolCode)</a>
+                <a class="button"
+                   href="@($"/downloads/reports/{itemId}/{_result.SchoolCode ?? "school"}-summary-report.pdf")"
+                   download="@($"{_result.SchoolCode ?? "school"}-summary-report.pdf")"
+                   target="_blank"
+                   rel="noopener"
+                   data-enhance-nav="false">Download PDF for @UiFormat.SchoolLabel(_result.SchoolCode ?? "unknown", _result.SchoolName)</a>
             </p>
         }
     </section>

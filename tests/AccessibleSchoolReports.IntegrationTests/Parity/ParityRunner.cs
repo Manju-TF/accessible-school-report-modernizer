@@ -321,7 +321,7 @@ internal static class ParityRunner
 
     internal static void WriteResultsDocument(ParityRun run)
     {
-        var path = Path.Combine(FindRepoRoot(), "docs", "capstone", "parity-results.md");
+        var path = Path.Combine(FindRepoRoot(), "evidence", "test-results", "parity-results.md");
         File.WriteAllText(path, RenderMarkdown(run));
     }
 }

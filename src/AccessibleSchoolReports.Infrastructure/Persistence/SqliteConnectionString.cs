@@ -4,10 +4,12 @@ namespace AccessibleSchoolReports.Infrastructure.Persistence;
 
 public static class SqliteConnectionString
 {
-    public static string Resolve(string connectionString, string contentRootPath)
+    public const string DefaultRelativePath = "data/schoolreports.db";
+
+    public static string Resolve(string connectionString, string baseDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
-        ArgumentException.ThrowIfNullOrWhiteSpace(contentRootPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(baseDirectory);
 
         var builder = new SqliteConnectionStringBuilder(connectionString);
         if (string.IsNullOrWhiteSpace(builder.DataSource))
@@ -17,7 +19,7 @@ public static class SqliteConnectionString
 
         if (!Path.IsPathRooted(builder.DataSource))
         {
-            builder.DataSource = Path.GetFullPath(builder.DataSource, contentRootPath);
+            builder.DataSource = Path.GetFullPath(builder.DataSource, baseDirectory);
         }
 
         var directory = Path.GetDirectoryName(builder.DataSource);
@@ -27,5 +29,32 @@ public static class SqliteConnectionString
         }
 
         return builder.ToString();
+    }
+
+    public static string ResolveWorkingDatabase(string connectionString, string startDirectory) =>
+        Resolve(connectionString, FindRepositoryRoot(startDirectory));
+
+    public static string GetDataSource(string connectionString)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        return new SqliteConnectionStringBuilder(connectionString).DataSource;
+    }
+
+    public static string FindRepositoryRoot(string startDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(startDirectory);
+
+        var directory = new DirectoryInfo(startDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "AccessibleSchoolReports.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return startDirectory;
     }
 }

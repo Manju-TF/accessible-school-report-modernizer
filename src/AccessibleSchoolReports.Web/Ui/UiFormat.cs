@@ -1,4 +1,5 @@
 using AccessibleSchoolReports.Domain.Persistence;
+using AccessibleSchoolReports.Infrastructure.Persistence;
 
 namespace AccessibleSchoolReports.Web.Ui;
 
@@ -60,7 +61,10 @@ public static class UiFormat
 
     public static string SchoolLabel(string code, string? name, int? graduateCount = null)
     {
-        var label = string.IsNullOrWhiteSpace(name) ? code : $"{code} — {name}";
+        var resolved = SchoolNameCatalog.DisplayName(code, name);
+        var label = string.IsNullOrWhiteSpace(resolved) || resolved == code
+            ? code
+            : $"{code} — {resolved}";
         if (graduateCount is null)
         {
             return label;

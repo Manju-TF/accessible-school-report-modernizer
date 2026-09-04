@@ -9,7 +9,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("SchoolReports")
     ?? throw new InvalidOperationException("Connection string 'SchoolReports' is not configured.");
-connectionString = SqliteConnectionString.Resolve(connectionString, builder.Environment.ContentRootPath);
+connectionString = SqliteConnectionString.ResolveWorkingDatabase(
+    connectionString,
+    builder.Environment.ContentRootPath);
 builder.Services.AddSchoolReportsPersistence(
     connectionString,
     options =>

@@ -3,19 +3,26 @@ using System.Globalization;
 namespace AccessibleSchoolReports.Application.Reporting;
 
 /// <summary>
-/// Characterized SAS report chrome and labels. Presentation only.
+/// Report chrome and labels. Presentation only.
+/// Organization names are a fictional test client, not NALP or ABA.
 /// Does not change calculator output.
 /// </summary>
 public static class SchoolReportPresentation
 {
     public const string Language = "en-US";
+    public const string Publisher = "Meridian Test Client";
+    public const string ComparisonPublisher = "Sample Board";
     public const string ClassYearTitle = "Class of 2025 Summary Report";
-    public const string PreparedLine = "Table prepared by NALP, July 2026";
-    public const string NotDisplayed = "Not displayed";
+    public const string PreparedLine = "Table prepared by Meridian Test Client, July 2026";
+    public const string FooterUrl = "www.example.com/report-info";
+    public const string FooterUrlHref = "https://www.example.com/report-info";
+    public const string FooterLinkName = "Test client report information";
+    public const string NotDisplayed = ".";
+    public const string NotDisplayedAccessibleName = "Not displayed";
     public const string SalaryGroupCaption = "Full-time Long-term Salaries";
 
     public const string Disclaimer =
-        "NALP Summary Report data may vary slightly from the school-specific data published by the ABA because of definitional differences between the two organizations and because NALP's quality control process can result in changes which may not be reflected in ABA data. For more on this, see www.nalp.org/erssinfo.";
+        "Meridian Test Client Summary Report data may vary slightly from the school-specific data published by the Sample Board because of definitional differences between the two organizations and because Meridian Test Client's quality control process can result in changes which may not be reflected in Sample Board data. For more on this, see www.example.com/report-info.";
 
     public const string NotePage1 =
         "Categories with no graduates reported are not shown. At least five salaries are required for each salary analysis. The non-binary or chose to self-identify category also includes graduates who selected multiple gender identities. Salaries are reported only for full-time, long-term positions. Salaries for graduates in law firm solo practice have been excluded from the analysis.";
@@ -117,30 +124,30 @@ public static class SchoolReportPresentation
 
     private static readonly Dictionary<string, string> SectionTitles = new(StringComparer.Ordinal)
     {
-        ["B"] = "Gender Reported",
-        ["C"] = "Race Reported",
-        ["C1"] = "Gender & Race Reported",
-        ["D"] = "Employment Status Known",
-        ["D1"] = "Total Employed or Enrolled in Graduate Studies",
-        ["D2"] = "Employment by Sector",
-        ["D3"] = "Full-time or Part-time Job Status",
-        ["E1"] = "Employment Categories",
-        ["E2"] = "Education Jobs",
-        ["E3"] = "Business Jobs",
-        ["E4"] = "Private Practice Jobs",
-        ["E5"] = "Government Jobs",
-        ["E55"] = "Judicial Clerkships",
-        ["E6"] = "Public Interest Jobs",
-        ["FIRM"] = "Size of Law Firm (by # of Attorneys)",
-        ["FIRM2"] = "Type of Law Firm Job",
-        ["JOBREG1"] = "Jobs Taken by Region",
-        ["JOBREG2"] = "Location of Jobs",
-        ["JOBREG3"] = "# States and Territories with Employed Grads",
-        ["SOURCE"] = "Source of Job",
-        ["TIME"] = "Timing of Job Offer",
-        ["ZSTATUS"] = "Search Status of Employed Grads",
-        ["DURATION"] = "Duration of Jobs by Employer Type",
-        ["LAW SCHOOL FUNDED"] = "Total Number of Jobs Reported as Funded by Law School",
+        ["B"] = "Gender Reported:",
+        ["C"] = "Race Reported:",
+        ["C1"] = "Gender & Race Reported:",
+        ["D"] = "Employment Status Known:",
+        ["D1"] = "Total Employed or Enrolled in Graduate Studies:",
+        ["D2"] = "Employment by Sector:",
+        ["D3"] = "Full-time or Part-time Job Status:",
+        ["E1"] = "Employment Categories:",
+        ["E2"] = "Education Jobs:",
+        ["E3"] = "Business Jobs:",
+        ["E4"] = "Private Practice Jobs:",
+        ["E5"] = "Government Jobs:",
+        ["E55"] = "Judicial Clerkships:",
+        ["E6"] = "Public Interest Jobs:",
+        ["FIRM"] = "Size of Law Firm (by # of Attorneys):",
+        ["FIRM2"] = "Type of Law Firm Job:",
+        ["JOBREG1"] = "Jobs Taken by Region:",
+        ["JOBREG2"] = "Location of Jobs:",
+        ["JOBREG3"] = "# States and Territories with Employed Grads:",
+        ["SOURCE"] = "Source of Job:",
+        ["TIME"] = "Timing of Job Offer:",
+        ["ZSTATUS"] = "Search Status of Employed Grads:",
+        ["DURATION"] = "Duration of Jobs by Employer Type:",
+        ["LAW SCHOOL FUNDED"] = "Total Number of Jobs Reported as Funded by Law School:",
     };
 
     private static readonly Dictionary<string, string> RowTitles = new(StringComparer.Ordinal)

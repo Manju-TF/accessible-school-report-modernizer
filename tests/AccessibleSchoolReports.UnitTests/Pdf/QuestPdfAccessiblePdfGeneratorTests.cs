@@ -2,7 +2,6 @@ using AccessibleSchoolReports.Application.Reporting;
 using AccessibleSchoolReports.Infrastructure.Pdf;
 using AccessibleSchoolReports.UnitTests.Reporting;
 using UglyToad.PdfPig;
-using UglyToad.PdfPig.Content;
 
 namespace AccessibleSchoolReports.UnitTests.Pdf;
 
@@ -35,13 +34,63 @@ public sealed class QuestPdfAccessiblePdfGeneratorTests
         Assert.Contains("Women", text);
         Assert.Contains("46.0", text);
         Assert.Contains("Men of Color", text);
-        Assert.Contains("Not displayed", text);
         Assert.Contains("Full-time Long-term Salaries", text);
+        Assert.Contains("Number of Jobs Reported as:", text);
         Assert.Contains("Duration of Jobs by Employer Type", text);
-        Assert.Contains("Long-term (1+ years)", text);
+        Assert.Contains("Long-term", text);
+        Assert.Contains("(1+ years)", text);
         Assert.Contains("At least five salaries are required", text);
-        Assert.Contains("Table prepared by NALP, July 2026", text);
-        Assert.Contains("www.nalp.org/erssinfo", text);
+        Assert.Contains(SchoolReportPresentation.PreparedLine, text);
+        Assert.Contains(SchoolReportPresentation.FooterUrl, text);
+        Assert.DoesNotContain("NALP", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("ABA", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("nalp.org", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("25th", text);
+        Assert.Contains("Percentile", text);
+    }
+
+    [Fact]
+    public void Generate_PageOne_ReadsSchoolNameThenHeadersThenTotalThenTablesThenNoteThenLink()
+    {
+        var pageOne = ExtractPageText(_generator.Generate(FixtureReport()), pageNumber: 1);
+
+        Assert.True(
+            IndexOf(pageOne, "Test University School of Law") < IndexOf(pageOne, "Full-time Long-term Salaries"),
+            "School name should be announced before the table headers.");
+        Assert.True(
+            IndexOf(pageOne, "Full-time Long-term Salaries") < IndexOf(pageOne, "Total Reported = 100"),
+            "SAS places Total Reported under the column headers.");
+        Assert.True(
+            IndexOf(pageOne, "Total Reported = 100") < IndexOf(pageOne, "Gender Reported"),
+            "Total Reported should be announced before the first data section.");
+        Assert.True(
+            IndexOf(pageOne, "Gender Reported") < IndexOf(pageOne, "At least five salaries are required"),
+            "Table sections should be announced before the page note.");
+        Assert.True(
+            IndexOf(pageOne, "At least five salaries are required") < IndexOf(pageOne, SchoolReportPresentation.FooterUrl),
+            "The page note should be announced before the test-client footer.");
+    }
+
+    [Fact]
+    public void Generate_PrintsNalpFooterOncePerPage_NotDuplicated()
+    {
+        var text = ExtractText(_generator.Generate(FixtureReport()));
+        var prepared = CountOccurrences(text, SchoolReportPresentation.PreparedLine);
+
+        Assert.Equal(7, prepared);
+        Assert.DoesNotContain("#084C9E", text);
+        Assert.DoesNotContain("shown in red", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Generate_WritesTaggedPdfMarkers_WithoutCertifyingAccessibility()
+    {
+        var pdf = System.Text.Encoding.ASCII.GetString(_generator.Generate(FixtureReport()));
+
+        Assert.Contains("/StructTreeRoot", pdf);
+        Assert.Contains("/Lang", pdf);
+        Assert.Contains("en-US", pdf);
+        Assert.Contains("pdfuaid", pdf);
     }
 
     [Fact]
@@ -58,7 +107,8 @@ public sealed class QuestPdfAccessiblePdfGeneratorTests
     {
         var text = ExtractText(_generator.Generate(FixtureReport()));
 
-        Assert.Contains("Not displayed", text);
+        Assert.Contains("Men of Color", text);
+        Assert.Contains(".", text);
         Assert.DoesNotContain("shown in red", text, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("shown in green", text, StringComparison.OrdinalIgnoreCase);
     }
@@ -109,6 +159,37 @@ public sealed class QuestPdfAccessiblePdfGeneratorTests
         return string.Join(
             "\n",
             document.GetPages().Select(page => string.Join(" ", page.GetWords().Select(word => word.Text))));
+    }
+
+    private static string ExtractPageText(byte[] pdf, int pageNumber)
+    {
+        using var document = PdfDocument.Open(new MemoryStream(pdf));
+        var page = document.GetPage(pageNumber);
+        return string.Join(" ", page.GetWords().Select(word => word.Text));
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var start = 0;
+        while (true)
+        {
+            var index = text.IndexOf(value, start, StringComparison.Ordinal);
+            if (index < 0)
+            {
+                return count;
+            }
+
+            count++;
+            start = index + value.Length;
+        }
+    }
+
+    private static int IndexOf(string text, string value)
+    {
+        var index = text.IndexOf(value, StringComparison.Ordinal);
+        Assert.True(index >= 0, $"Expected to find '{value}' in extracted page text.");
+        return index;
     }
 
     private static SchoolReport FixtureReport()

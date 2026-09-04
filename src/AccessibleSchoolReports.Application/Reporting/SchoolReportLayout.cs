@@ -83,7 +83,7 @@ public static class SchoolReportLayout
 
         var schoolName = string.IsNullOrWhiteSpace(report.SchoolName)
             ? report.SchoolCode
-            : report.SchoolName;
+            : report.SchoolName.Trim();
         var total = report.Rows.FirstOrDefault(row => row.Analvar == "A" && row.Newvar == "A")?.Count;
 
         return new PrintableReport

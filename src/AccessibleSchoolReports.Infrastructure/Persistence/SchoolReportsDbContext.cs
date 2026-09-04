@@ -26,6 +26,7 @@ public sealed class SchoolReportsDbContext : DbContext
     {
         await Database.MigrateAsync(cancellationToken);
         await PrepareSqliteAsync(cancellationToken);
+        await SchoolNameCatalog.ApplyToExistingSchoolsAsync(this, cancellationToken);
     }
 
     public Task PrepareSqliteAsync(CancellationToken cancellationToken = default) =>

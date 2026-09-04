@@ -2,7 +2,7 @@
 
 **Status:** Approved. This is the plan to implement.
 
-The original four-project AI plan in `docs/capstone/implementation-plan.md` is **rejected**. Do not implement Domain / Application / Infrastructure projects, ports, summary tables, migrations, or five Blazor pages.
+The original four-project AI plan in `docs/architecture/implementation-plan.md` is **rejected**. Do not implement Domain / Application / Infrastructure projects, ports, summary tables, migrations, or five Blazor pages.
 
 **Do not start coding until the human says to start.** No application code was added when this status was set.
 
@@ -217,7 +217,7 @@ If the clock runs out, drop CI, extra E2E flows, and parallel *tuning*. Do not d
 
 | File | Meaning |
 |---|---|
-| `docs/capstone/implementation-plan.md` | Original AI plan. **Rejected.** Historical record only. |
-| `docs/capstone/corrected-plan.md` | **Approved.** Human-directed MVP. **Use this to implement.** |
+| `docs/architecture/implementation-plan.md` | Original AI plan. **Rejected.** Historical record only. |
+| `docs/architecture/corrected-plan.md` | **Approved.** Human-directed MVP. **Use this to implement.** |
 
 No projects, entities, or UI were created from this status change. Start only when the human says to begin (calculator + `n ge 5` tests first).

@@ -2,7 +2,7 @@ namespace AccessibleSchoolReports.Domain.Recodes;
 
 /// <summary>
 /// Confirmed SAS preprocessing from <c>createschrptfiles2025.sas</c>
-/// <c>DATA fornalprepts</c> (CF-PREP-*). Ambiguous rules are not guessed.
+/// Characterized recodes from the legacy SAS builder (CF-PREP-*). Ambiguous rules are not guessed.
 /// </summary>
 public static class LegacyRecodes
 {

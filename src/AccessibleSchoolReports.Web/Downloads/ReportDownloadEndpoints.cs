@@ -2,6 +2,7 @@ using AccessibleSchoolReports.Application.Reporting;
 using AccessibleSchoolReports.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using Microsoft.Net.Http.Headers;
 
 namespace AccessibleSchoolReports.Web.Downloads;
 
@@ -9,6 +10,7 @@ public static class ReportDownloadEndpoints
 {
     public static void MapReportDownloads(this WebApplication app)
     {
+        app.MapGet("/downloads/reports/{itemId:int}/{fileName}", DownloadAsync);
         app.MapGet("/downloads/reports/{itemId:int}", DownloadAsync);
     }
 
@@ -30,7 +32,7 @@ public static class ReportDownloadEndpoints
         }
 
         var fileName = $"{SanitizeFileName(item.School.Code)}-summary-report.pdf";
-        return Results.File(path, "application/pdf", fileName);
+        return new PdfFileDownloadResult(path, fileName);
     }
 
     private static string SanitizeFileName(string? value)
@@ -43,5 +45,30 @@ public static class ReportDownloadEndpoints
         var invalid = Path.GetInvalidFileNameChars();
         var chars = value.Select(ch => invalid.Contains(ch) ? '-' : ch).ToArray();
         return new string(chars);
+    }
+
+    private sealed class PdfFileDownloadResult : IResult
+    {
+        private readonly string _path;
+        private readonly string _fileName;
+
+        public PdfFileDownloadResult(string path, string fileName)
+        {
+            _path = path;
+            _fileName = fileName;
+        }
+
+        public async Task ExecuteAsync(HttpContext httpContext)
+        {
+            var disposition = new ContentDispositionHeaderValue("attachment")
+            {
+                FileName = _fileName
+            };
+
+            httpContext.Response.ContentType = "application/pdf";
+            httpContext.Response.Headers.XContentTypeOptions = "nosniff";
+            httpContext.Response.Headers.ContentDisposition = disposition.ToString();
+            await httpContext.Response.SendFileAsync(_path, httpContext.RequestAborted);
+        }
     }
 }
