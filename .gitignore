@@ -10,4 +10,10 @@ data/reports/
 data/*.db
 output/
 .github/copilot-instructions.md
-evidence/screenshots/
+.env
+*.env
+**/.env.*
+secrets.json
+**/secrets.json
+appsettings.Local.json
+**/appsettings.*.local.json

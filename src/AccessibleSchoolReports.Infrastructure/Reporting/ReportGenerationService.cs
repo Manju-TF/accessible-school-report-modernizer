@@ -1,4 +1,7 @@
+using System.Security.Claims;
+using AccessibleSchoolReports.Application.Knowledge;
 using AccessibleSchoolReports.Application.Reporting;
+using AccessibleSchoolReports.Application.Security;
 using AccessibleSchoolReports.Domain.Entities;
 using AccessibleSchoolReports.Domain.Persistence;
 using AccessibleSchoolReports.Infrastructure.Persistence;
@@ -13,6 +16,10 @@ public sealed class ReportGenerationService : IReportGenerationService
     private readonly IDbContextFactory<SchoolReportsDbContext> _dbFactory;
     private readonly ISchoolReportCalculator _calculator;
     private readonly IAccessiblePdfGenerator _pdfGenerator;
+    private readonly IReportAuthorizationService _authorization;
+    private readonly IPdfKnowledgeIngestionService _pdfKnowledge;
+    private readonly IKnowledgeEmbeddingIndexService _embeddingIndex;
+    private readonly ICurrentUserAccessor _currentUser;
     private readonly ReportGenerationOptions _options;
 
     public ReportGenerationService(
@@ -20,12 +27,20 @@ public sealed class ReportGenerationService : IReportGenerationService
         IDbContextFactory<SchoolReportsDbContext> dbFactory,
         ISchoolReportCalculator calculator,
         IAccessiblePdfGenerator pdfGenerator,
+        IReportAuthorizationService authorization,
+        IPdfKnowledgeIngestionService pdfKnowledge,
+        IKnowledgeEmbeddingIndexService embeddingIndex,
+        ICurrentUserAccessor currentUser,
         IOptions<ReportGenerationOptions> options)
     {
         _db = db;
         _dbFactory = dbFactory;
         _calculator = calculator;
         _pdfGenerator = pdfGenerator;
+        _authorization = authorization;
+        _pdfKnowledge = pdfKnowledge;
+        _embeddingIndex = embeddingIndex;
+        _currentUser = currentUser;
         _options = options.Value;
     }
 
@@ -41,6 +56,13 @@ public sealed class ReportGenerationService : IReportGenerationService
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!await _authorization.CanGenerateReportAsync(_currentUser.User, schoolId, cancellationToken))
+            {
+                var denied = FailedResult(run.Id, schoolId, started, "Not authorized to generate this school report.");
+                await CompleteRunAsync(run, started, RunStatus.Failed, total: 1, successful: 0, failed: 1, denied.Message!);
+                return denied;
+            }
+
             var school = await _db.Schools
                 .AsNoTracking()
                 .FirstOrDefaultAsync(row => row.Id == schoolId, cancellationToken);
@@ -78,7 +100,7 @@ public sealed class ReportGenerationService : IReportGenerationService
 
         try
         {
-            var schools = await LoadEligibleSchoolsAsync(_db, cancellationToken);
+            var schools = await LoadEligibleSchoolsAsync(_db, _currentUser.User, cancellationToken);
             ReportProgress(progress, schools.Count, items);
 
             foreach (var school in schools)
@@ -150,7 +172,7 @@ public sealed class ReportGenerationService : IReportGenerationService
 
         try
         {
-            var schools = await LoadEligibleSchoolsAsync(_db, cancellationToken);
+            var schools = await LoadEligibleSchoolsAsync(_db, _currentUser.User, cancellationToken);
             ReportProgress(progress, schools.Count, items);
             await Parallel.ForEachAsync(
                 schools,
@@ -272,7 +294,7 @@ public sealed class ReportGenerationService : IReportGenerationService
                 await stream.FlushAsync(CancellationToken.None);
             }
 
-            return await PersistItemAsync(
+            var completed = await PersistItemAsync(
                 db,
                 reportRunId,
                 school,
@@ -281,6 +303,8 @@ public sealed class ReportGenerationService : IReportGenerationService
                 outputPath,
                 graduates.Count,
                 $"Generated {graduates.Count} graduate(s).");
+            await TryIndexGeneratedPdfAsync(completed);
+            return completed;
         }
         catch (OperationCanceledException)
         {
@@ -417,14 +441,29 @@ public sealed class ReportGenerationService : IReportGenerationService
         };
     }
 
-    private static async Task<List<School>> LoadEligibleSchoolsAsync(
+    private async Task<List<School>> LoadEligibleSchoolsAsync(
         SchoolReportsDbContext db,
-        CancellationToken cancellationToken) =>
-        await db.Schools
+        ClaimsPrincipal user,
+        CancellationToken cancellationToken)
+    {
+        var allowed = await _authorization.GetAccessibleSchoolIdsAsync(user, cancellationToken);
+        var schools = await db.Schools
             .AsNoTracking()
             .Where(school => db.GraduateRecords.Any(row => row.SchoolId == school.Id))
             .OrderBy(school => school.Code)
             .ToListAsync(cancellationToken);
+        var permitted = new List<School>();
+        foreach (var school in schools)
+        {
+            if (allowed.Contains(school.Id)
+                && await _authorization.CanGenerateReportAsync(user, school.Id, cancellationToken))
+            {
+                permitted.Add(school);
+            }
+        }
+
+        return permitted;
+    }
 
     private static IReadOnlyList<SchoolReportGenerationResult> OrderItems(
         IEnumerable<SchoolReportGenerationResult> items) =>
@@ -470,6 +509,37 @@ public sealed class ReportGenerationService : IReportGenerationService
             CompletedUtc = completed,
             Duration = duration,
         };
+    }
+
+    private async Task TryIndexGeneratedPdfAsync(SchoolReportGenerationResult result)
+    {
+        if (result.Status != RunStatus.Completed
+            || result.ReportRunItemId is not int itemId
+            || string.IsNullOrWhiteSpace(result.OutputPath))
+        {
+            return;
+        }
+
+        try
+        {
+            await _pdfKnowledge.IndexGeneratedReportAsync(
+                new GeneratedPdfKnowledgeRequest
+                {
+                    ReportRunItemId = itemId,
+                    ReportRunId = result.ReportRunId,
+                    SchoolId = result.SchoolId,
+                    SchoolCode = result.SchoolCode,
+                    OutputPath = result.OutputPath,
+                    ReportYear = int.TryParse(ResolveClassYear(null), out var year) ? year : 2025,
+                    ReportType = GeneratedPdfKnowledgeRequest.DefaultReportType,
+                },
+                CancellationToken.None);
+            await _embeddingIndex.IndexPendingEmbeddingsAsync(_currentUser.User, CancellationToken.None);
+        }
+        catch
+        {
+            // Indexing must not delete the PDF or fail generation.
+        }
     }
 
     private string YearFolder(string? classYear = null) =>

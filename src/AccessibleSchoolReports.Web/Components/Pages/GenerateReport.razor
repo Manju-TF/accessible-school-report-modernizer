@@ -1,7 +1,10 @@
 @page "/generate"
+@attribute [Authorize(Policy = AppPolicies.RequireReportGeneration)]
 @rendermode InteractiveServer
 @inject SchoolReportsDbContext Db
 @inject IReportGenerationService Generation
+@inject IReportAuthorizationService Authorization
+@inject AuthenticationStateProvider AuthenticationState
 @inject IOptions<ReportGenerationOptions> GenerationOptions
 @inject IJSRuntime Js
 
@@ -37,7 +40,7 @@
                         <option value="@school.Id">@UiFormat.SchoolLabel(school.Code, school.Name, school.GraduateCount)</option>
                     }
                 </select>
-                <p id="school-help" class="hint">Only schools with at least one graduate record are listed.</p>
+                <p id="school-help" class="hint">Only assigned schools with graduate records are listed. Admin sees every school.</p>
             </div>
             <div class="field">
                 <label for="report-year">Report year</label>
@@ -86,6 +89,7 @@
                    target="_blank"
                    rel="noopener"
                    data-enhance-nav="false">Download PDF for @UiFormat.SchoolLabel(_result.SchoolCode ?? "unknown", _result.SchoolName)</a>
+                <a href="@($"/reports/{itemId}")">Ask about this report</a>
             </p>
         }
     </section>
@@ -116,9 +120,12 @@
         _classYear = GenerationOptions.Value.ClassYear;
         try
         {
+            var user = (await AuthenticationState.GetAuthenticationStateAsync()).User;
+            var allowed = await Authorization.GetAccessibleSchoolIdsAsync(user);
             var rows = await Db.Schools
                 .AsNoTracking()
-                .Where(school => Db.GraduateRecords.Any(row => row.SchoolId == school.Id))
+                .Where(school => allowed.Contains(school.Id)
+                    && Db.GraduateRecords.Any(row => row.SchoolId == school.Id))
                 .OrderBy(school => school.Code)
                 .Select(school => new SchoolChoice(
                     school.Id,
@@ -126,7 +133,13 @@
                     school.Name,
                     Db.GraduateRecords.Count(row => row.SchoolId == school.Id)))
                 .ToListAsync();
-            _schools.AddRange(rows);
+            foreach (var row in rows)
+            {
+                if (await Authorization.CanGenerateReportAsync(user, row.Id))
+                {
+                    _schools.Add(row);
+                }
+            }
         }
         catch (Exception exception)
         {

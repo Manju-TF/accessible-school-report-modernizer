@@ -1,12 +1,12 @@
 @page "/"
+@attribute [Authorize(Policy = AppPolicies.RequireReportAccess)]
 @rendermode InteractiveServer
 @inject SchoolReportsDbContext Db
-@inject WorkingDatabase Database
 
 <PageTitle>Dashboard</PageTitle>
 
 <h1>Dashboard</h1>
-<p class="lede">Current database contents and the most recent import and report activity.</p>
+<p class="lede">Import status and the most recent report activity.</p>
 
 @if (_loadError is not null)
 {
@@ -18,12 +18,6 @@ else if (!_loaded)
 }
 else
 {
-    <section class="panel" aria-labelledby="db-location-heading">
-        <h2 id="db-location-heading">Database location</h2>
-        <p class="database-path">@Database.FilePath</p>
-        <p>This is the only SQLite file the application reads and writes.</p>
-    </section>
-
     <div class="card-grid">
         <section class="card" aria-labelledby="db-status-heading">
             <h2 id="db-status-heading">Database status</h2>

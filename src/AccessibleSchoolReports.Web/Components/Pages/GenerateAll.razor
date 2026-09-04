@@ -1,4 +1,5 @@
 @page "/generate-all"
+@attribute [Authorize(Policy = AppPolicies.RequireAdmin)]
 @rendermode InteractiveServer
 @inject SchoolReportsDbContext Db
 @inject IReportGenerationService Generation

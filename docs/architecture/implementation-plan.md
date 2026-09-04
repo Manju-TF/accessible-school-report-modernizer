@@ -2,7 +2,7 @@
 
 **Status:** Rejected. Do not implement from this file.
 
-**Superseded by:** `docs/architecture/corrected-plan.md` (approved 30-hour MVP architecture).
+**Superseded by:** `docs/architecture/corrected-plan.md` (approved architecture).
 
 This file is the original AI four-project plan. It is kept only as a record of what was proposed and why it was too large for a solo capstone. Required *features* from this plan still apply; they are delivered with the **corrected** layering (one Web project, two tables, no ports).
 
@@ -25,7 +25,7 @@ Do not scaffold `Domain` / `Application` / `Infrastructure`, ports, summary tabl
 | Excel | Formal map gate before EF schema | Short header list; do not invent columns |
 | CI | Step 14 thin workflow | Skip unless time left |
 
-**Why original is rejected.** The stack and features fit the capstone. The four-project overlay, ports, summary warehouse, and per-step evidence do not fit 30 solo hours. Implement `corrected-plan.md`.
+**Why original is rejected.** The stack and features fit the capstone. The four-project overlay, ports, summary warehouse, and per-step evidence do not fit a solo-capstone scope. Implement `corrected-plan.md`.
 
 ---
 
@@ -450,20 +450,20 @@ tests/AccessibleSchoolReports.Web.E2ETests
 
 ---
 
-## Suggested 30-hour budget
+## Suggested budget (rejected plan)
 
-| Hours | Steps |
+| Relative effort | Steps |
 |---|---|
-| 2 | 1 Excel map + approval |
-| 2 | 2 scaffold |
-| 4 | 3–4 recodes + counts |
-| 3 | 5 salaries + suppression |
-| 3 | 6–7 SQLite + import |
-| 3 | 8 summary use case |
-| 5 | 9 PDF |
-| 3 | 10 UI |
-| 2 | 11 batch + history |
-| 2 | 12–14 a11y evidence, E2E, CI |
+| Low | 1 Excel map + approval |
+| Low | 2 scaffold |
+| Medium | 3–4 recodes + counts |
+| Medium | 5 salaries + suppression |
+| Medium | 6–7 SQLite + import |
+| Medium | 8 summary use case |
+| High | 9 PDF |
+| Medium | 10 UI |
+| Low | 11 batch + history |
+| Low | 12–14 a11y evidence, E2E, CI |
 
 This budget belongs to the rejected plan. Use the implementation order in `corrected-plan.md`.
 

@@ -1,11 +1,11 @@
 ---
-description: Keep the 30-hour MVP simple with SQLite and tested calculations
+description: Keep the MVP simple with SQLite and tested calculations
 alwaysApply: true
 ---
 
 # MVP Constraints
 
-This is a 30-hour capstone. Do not over-engineer.
+Do not over-engineer.
 
 - SQLite is the required MVP database. Do not introduce another database.
 - Business calculations require automated tests.

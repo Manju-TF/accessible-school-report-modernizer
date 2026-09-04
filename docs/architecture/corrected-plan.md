@@ -6,7 +6,7 @@ The original four-project AI plan in `docs/architecture/implementation-plan.md` 
 
 **Do not start coding until the human says to start.** No application code was added when this status was set.
 
-This file is the 30-hour MVP architecture. Required features stay; extra structure from the original plan does not.
+This file is the approved MVP architecture. Required features stay; extra structure from the original plan does not.
 
 Required outcomes stay: import, validate, SQLite, characterized SAS rules, single-school PDF, sequential all-school, bounded parallel all-school, run history, tagged-PDF *target*, accessible UI, xUnit, Playwright.
 
@@ -14,7 +14,7 @@ Required outcomes stay: import, validate, SQLite, characterized SAS rules, singl
 
 ---
 
-## Review against the 30-hour solo constraint
+## Review against the solo-capstone constraint
 
 A solo capstone can ship:
 
@@ -22,7 +22,7 @@ Excel → validate → SQLite → apply characterized SAS rules → school PDFs 
 
 It cannot also finish clean-architecture ports, four test assemblies, migrations, a summary warehouse, five Blazor pages, per-step evidence packs, and a full a11y/CI toolchain without cutting the rules or the PDF.
 
-The original AI plan’s stack (.NET 8, Blazor, EF Core, SQLite, ClosedXML, QuestPDF, xUnit, Playwright) is right. The **assembly and process overlay** is what exceeds 30 hours.
+The original AI plan’s stack (.NET 8, Blazor, EF Core, SQLite, ClosedXML, QuestPDF, xUnit, Playwright) is right. The **assembly and process overlay** is what exceeds a solo-capstone scope.
 
 ---
 

@@ -29,4 +29,6 @@ public sealed class ReportRun
     public string? Message { get; set; }
 
     public ICollection<ReportRunItem> Items { get; } = new List<ReportRunItem>();
+
+    public ICollection<KnowledgeDocument> KnowledgeDocuments { get; } = new List<KnowledgeDocument>();
 }
