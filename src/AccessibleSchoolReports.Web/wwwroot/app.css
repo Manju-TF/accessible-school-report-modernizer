@@ -641,14 +641,64 @@ summary {
 
 .suggested-questions {
     max-width: none;
+    display: grid;
+    gap: 1rem;
+}
+
+.suggestion-group {
+    margin: 0;
+    padding: 0.55rem 0.85rem 0.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: #f7fafc;
+}
+
+.suggestion-group > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    cursor: pointer;
+    list-style: none;
+    padding: 0.35rem 0 0.15rem;
+    font-weight: 700;
+}
+
+.suggestion-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+.suggestion-group > summary::before {
+    content: "";
+    width: 0.45rem;
+    height: 0.45rem;
+    border-right: 2px solid var(--color-accent);
+    border-bottom: 2px solid var(--color-accent);
+    transform: rotate(-45deg);
+    translate: 0 -1px;
+}
+
+.suggestion-group[open] > summary::before {
+    transform: rotate(45deg);
+    translate: 0 -2px;
+}
+
+.suggestion-group-title {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--color-accent);
+}
+
+.suggestion-group .hint {
+    margin: 0 0 0.55rem;
+    font-size: 0.88rem;
 }
 
 .suggested-question-list {
     list-style: none;
-    margin: 0.5rem 0 0;
+    margin: 0;
     padding: 0;
     display: grid;
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 
 .suggested-question {
@@ -656,6 +706,7 @@ summary {
     max-width: none;
     text-align: left;
     font-weight: 600;
+    font-size: 0.92rem;
 }
 
 .assistant-output {
@@ -669,8 +720,83 @@ summary {
     margin: 0;
 }
 
+.answer-panel {
+    padding: 1.25rem 1.35rem 1.4rem;
+}
+
 .assistant-answer {
-    white-space: pre-wrap;
+    color: var(--color-text);
+}
+
+.assistant-answer > :first-child {
+    margin-top: 0;
+}
+
+.assistant-answer > :last-child {
+    margin-bottom: 0;
+}
+
+.assistant-answer p {
+    margin: 0 0 0.85rem;
+    max-width: 48rem;
+}
+
+.assistant-answer h1,
+.assistant-answer h2,
+.assistant-answer h3,
+.assistant-answer h4 {
+    margin: 1.15rem 0 0.55rem;
+    color: var(--color-accent);
+    letter-spacing: -0.02em;
+}
+
+.assistant-answer h1 {
+    font-size: 1.25rem;
+}
+
+.assistant-answer h2,
+.assistant-answer h3 {
+    font-size: 1.1rem;
+}
+
+.assistant-answer h4 {
+    font-size: 1rem;
+}
+
+.assistant-answer ul,
+.assistant-answer ol {
+    margin: 0 0 0.9rem;
+    padding-left: 1.25rem;
+}
+
+.assistant-answer li {
+    margin: 0.25rem 0;
+}
+
+.assistant-answer strong {
+    color: var(--color-text);
+}
+
+.assistant-answer .table-wrap {
+    margin: 0.85rem 0 1.1rem;
+    border: 1px solid var(--color-border);
+    box-shadow: none;
+}
+
+.assistant-answer table {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.assistant-answer th {
+    background: #e7eef4;
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.assistant-answer td:first-child {
+    font-weight: 650;
 }
 
 .source-list {

@@ -59,19 +59,32 @@
         </div>
         <fieldset class="suggested-questions">
             <legend>Suggested questions</legend>
-            <ul class="suggested-question-list">
-                @foreach (var suggestion in Suggestions)
-                {
-                    <li>
-                        <button type="button"
-                                class="button-secondary suggested-question"
-                                disabled="@_busy"
-                                @onclick="() => UseSuggestion(suggestion)">
-                            @suggestion
-                        </button>
-                    </li>
-                }
-            </ul>
+            @{
+                var suggestionGroups = AssistantSuggestions.ForScope(_reportContext is not null);
+            }
+            @for (var index = 0; index < suggestionGroups.Count; index++)
+            {
+                var group = suggestionGroups[index];
+                <details class="suggestion-group" open="@(index == 0)">
+                    <summary>
+                        <h3 id="@GroupHeadingId(group.Title)" class="suggestion-group-title">@group.Title</h3>
+                    </summary>
+                    <p class="hint">@group.Hint</p>
+                    <ul class="suggested-question-list">
+                        @foreach (var suggestion in group.Questions)
+                        {
+                            <li>
+                                <button type="button"
+                                        class="button-secondary suggested-question"
+                                        disabled="@_busy"
+                                        @onclick="() => UseSuggestion(suggestion)">
+                                    @suggestion
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                </details>
+            }
         </fieldset>
         <div class="actions">
             <button type="submit" disabled="@_busy">
@@ -100,9 +113,11 @@
 else if (_answer is not null)
 {
     <div class="assistant-output">
-    <section class="panel" aria-labelledby="assistant-answer-heading">
+    <section class="panel answer-panel" aria-labelledby="assistant-answer-heading">
         <h2 id="assistant-answer-heading" class="result-heading" tabindex="-1" @ref="_resultHeading">Answer</h2>
-        <p class="assistant-answer">@_answer</p>
+        <div class="assistant-answer">
+            @((MarkupString)AssistantAnswerHtml.ToSafeHtml(_answer))
+        </div>
     </section>
 
     <section class="panel" aria-labelledby="assistant-sources-heading">
@@ -145,17 +160,6 @@ else if (_answer is not null)
 }
 
 @code {
-    private static readonly string[] Suggestions =
-    [
-        "How is salary suppression handled?",
-        "How is median salary calculated?",
-        "Which SAS program generates the report?",
-        "Where is CF-S-00 documented?",
-        "Which rules are ambiguous?",
-        "Which rules appear to lack tests?",
-        "What does the generated report say about employment?",
-    ];
-
     [SupplyParameterFromQuery(Name = "report")]
     public int? ReportQuery { get; set; }
 
@@ -176,6 +180,9 @@ else if (_answer is not null)
 
     private string QuestionDescribedBy =>
         _questionInvalid ? "assistant-question-help assistant-status" : "assistant-question-help";
+
+    private static string GroupHeadingId(string title) =>
+        "suggestion-group-" + title.Replace(' ', '-').ToLowerInvariant();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -370,6 +377,8 @@ else if (_answer is not null)
             LanguageModelTimeoutException => "The language model timed out. Try again.",
             LanguageModelProviderException { StatusCode: 429 } =>
                 "The language model is rate-limited. Wait a minute and try again.",
+            LanguageModelProviderException { StatusCode: 404 } =>
+                "The language model was not found. Check LanguageModel:Model.",
             LanguageModelProviderException => "The language model could not complete the request.",
             EmbeddingConfigurationException => "Embeddings are not configured.",
             EmbeddingTimeoutException => "The embedding service timed out. Try again.",
