@@ -28,6 +28,8 @@ docs/
 | `external-rag-api.md` | Embedding and language-model integration |
 | `generated-pdf-rag.md` | How a generated PDF becomes knowledge chunks |
 
+Demo defense pack (slides, script, evaluator packet): [`capstone-demo/`](capstone-demo/README.md).
+
 ## Architecture
 
 | File | Role |

@@ -58,15 +58,21 @@ body,
 html,
 body {
   color: var(--ink);
-  overflow-x: hidden;
+  height: 100%;
+  overflow: hidden;
 }
 
 #root {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
   font-family: var(--font);
   font-size: 1rem;
   line-height: 1.55;
@@ -428,6 +434,7 @@ img.nav-icon.nav-robot {
   padding: 1.7rem 1.9rem 2.6rem;
   width: auto;
   min-width: 0;
+  min-height: 0;
   height: 100%;
   overflow: auto;
   background: var(--paper);
@@ -545,7 +552,7 @@ img.nav-icon.nav-robot {
 }
 
 .table-wrap-tall {
-  max-height: 32rem;
+  max-height: min(22rem, 46dvh);
 }
 
 .bar-track {
@@ -616,6 +623,23 @@ img.nav-icon.nav-robot {
 .choice-grid {
   display: grid;
   gap: 1rem;
+}
+
+.dashboard-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(16rem, 1fr);
+  gap: 1rem;
+  margin: 0 0 1rem;
+}
+
+.dashboard-split .panel {
+  margin-top: 0;
+  min-width: 0;
+}
+
+.dashboard-split .rank-list {
+  max-height: min(22rem, 46dvh);
+  overflow: auto;
 }
 
 .card-grid {
@@ -1667,7 +1691,8 @@ button.suggested-question:hover:not(:disabled) {
 
 @media (max-width: 900px) {
   .auth-split,
-  .assistant-output {
+  .assistant-output,
+  .dashboard-split {
     grid-template-columns: 1fr;
   }
 
@@ -1694,6 +1719,18 @@ button.suggested-question:hover:not(:disabled) {
 }
 
 @media (max-width: 800px) {
+  html,
+  body,
+  #root {
+    height: auto;
+    overflow: auto;
+  }
+
+  body {
+    position: static;
+    inset: auto;
+  }
+
   .site-header,
   .site-footer {
     padding: 0.85rem 1rem;

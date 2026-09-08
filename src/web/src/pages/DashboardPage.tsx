@@ -204,6 +204,7 @@ export function DashboardPage() {
         </section>
       </div>
 
+      <div className="dashboard-split">
       <section className="panel" aria-labelledby="year-compare-heading">
         <h2 id="year-compare-heading">Year comparison</h2>
         {data.years.length === 0 ? (
@@ -266,6 +267,7 @@ export function DashboardPage() {
           </ol>
         )}
       </section>
+      </div>
 
       <section className="panel" aria-labelledby="school-compare-heading">
         <div className="panel-head">
