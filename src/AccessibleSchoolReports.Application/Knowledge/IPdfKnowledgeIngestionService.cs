@@ -5,6 +5,13 @@ public interface IPdfKnowledgeIngestionService
     Task<PdfKnowledgeIngestionResult> IndexGeneratedReportAsync(
         GeneratedPdfKnowledgeRequest request,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Indexes completed <c>ReportRunItem</c> PDFs that are missing or stale in the knowledge store.
+    /// Does not scan files that have no completed run item.
+    /// </summary>
+    Task<PdfKnowledgeBackfillResult> IndexCompletedReportsAsync(
+        CancellationToken cancellationToken = default);
 }
 
 public sealed class GeneratedPdfKnowledgeRequest
@@ -55,4 +62,17 @@ public sealed class PdfKnowledgeIngestionResult
             KnowledgeDocumentId = knowledgeDocumentId,
             Message = message,
         };
+}
+
+public sealed class PdfKnowledgeBackfillResult
+{
+    public int Indexed { get; init; }
+
+    public int Reindexed { get; init; }
+
+    public int Skipped { get; init; }
+
+    public int Failed { get; init; }
+
+    public int Attempted => Indexed + Reindexed + Skipped + Failed;
 }

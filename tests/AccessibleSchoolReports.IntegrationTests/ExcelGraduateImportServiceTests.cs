@@ -110,6 +110,48 @@ public sealed class ExcelGraduateImportServiceTests
     }
 
     [Fact]
+    public async Task Import_PersistsOptionalClassYear()
+    {
+        await using var db = await SqliteTestDatabase.CreateAsync();
+        var service = new ExcelGraduateImportService(db.Context);
+        var headers = GraduateImportColumns.Required.Concat([GraduateImportColumns.ClassYear]).ToArray();
+        var row2023 = ValidRow("10701");
+        row2023[GraduateImportColumns.ClassYear] = 2023;
+        var row2024 = ValidRow("10702");
+        row2024[GraduateImportColumns.ClassYear] = 2024;
+        using var stream = CreateWorkbook(headers, row2023, row2024);
+
+        var result = await service.ImportAsync(stream, "years.xlsx");
+
+        Assert.Equal(RunStatus.Completed, result.Status);
+        var graduates = await db.Context.GraduateRecords.Include(row => row.School).OrderBy(row => row.School.Code).ToListAsync();
+        Assert.Equal(2023, graduates[0].ClassYear);
+        Assert.Equal(2024, graduates[1].ClassYear);
+    }
+
+    [Fact]
+    public async Task Import_Duplicate_BackfillsMissingClassYears()
+    {
+        await using var db = await SqliteTestDatabase.CreateAsync();
+        var service = new ExcelGraduateImportService(db.Context);
+        var headers = GraduateImportColumns.Required.Concat([GraduateImportColumns.ClassYear]).ToArray();
+        var row = ValidRow("10701");
+        row[GraduateImportColumns.ClassYear] = 2023;
+        var bytes = CreateWorkbook(headers, row).ToArray();
+
+        await service.ImportAsync(new MemoryStream(bytes), "years.xlsx");
+        var stored = Assert.Single(await db.Context.GraduateRecords.ToListAsync());
+        stored.ClassYear = null;
+        await db.Context.SaveChangesAsync();
+
+        var second = await service.ImportAsync(new MemoryStream(bytes), "years.xlsx");
+
+        Assert.True(second.WasDuplicate);
+        Assert.Contains("Class years were filled", second.Message);
+        Assert.Equal(2023, Assert.Single(await db.Context.GraduateRecords.ToListAsync()).ClassYear);
+    }
+
+    [Fact]
     public async Task Import_SameFile_IsRejectedAsDuplicate()
     {
         await using var db = await SqliteTestDatabase.CreateAsync();
@@ -122,6 +164,62 @@ public sealed class ExcelGraduateImportServiceTests
         Assert.False(first.WasDuplicate);
         Assert.True(second.WasDuplicate);
         Assert.Equal(first.ImportRunId, second.DuplicateOfImportRunId);
+        Assert.Equal(1, await db.Context.ImportRuns.CountAsync());
+        Assert.Equal(1, await db.Context.GraduateRecords.CountAsync());
+    }
+
+    [Fact]
+    public async Task Import_SameRowsDifferentWorkbook_IsRejectedAsDuplicate()
+    {
+        await using var db = await SqliteTestDatabase.CreateAsync();
+        var service = new ExcelGraduateImportService(db.Context);
+        var row = ValidRow("10701");
+        using var original = CreateWorkbook(GraduateImportColumns.Required, row);
+        using var resaved = CreateWorkbook(
+            GraduateImportColumns.Required.Concat(["notes"]).ToArray(),
+            new Dictionary<string, object?>(row, StringComparer.Ordinal) { ["notes"] = "resaved" });
+
+        var first = await service.ImportAsync(original, "graduates.xlsx");
+        var second = await service.ImportAsync(resaved, "graduates-copy.xlsx");
+
+        Assert.False(first.WasDuplicate);
+        Assert.True(second.WasDuplicate);
+        Assert.Equal(1, await db.Context.GraduateRecords.CountAsync());
+        Assert.Equal(1, await db.Context.ImportRuns.CountAsync(run => run.ImportedRowCount > 0));
+    }
+
+    [Fact]
+    public async Task Cleanup_RemovesNewerDuplicateImportRun()
+    {
+        await using var db = await SqliteTestDatabase.CreateAsync();
+        var service = new ExcelGraduateImportService(db.Context);
+        using var firstFile = CreateWorkbook(GraduateImportColumns.Required, ValidRow("10701"));
+        await service.ImportAsync(firstFile, "first.xlsx");
+
+        var first = await db.Context.ImportRuns.SingleAsync();
+        db.Context.ImportRuns.Add(new AccessibleSchoolReports.Domain.Entities.ImportRun
+        {
+            FileName = "first-again.xlsx",
+            ContentSha256 = first.ContentSha256,
+            RowSetSha256 = first.RowSetSha256,
+            StartedUtc = DateTimeOffset.UtcNow,
+            CompletedUtc = DateTimeOffset.UtcNow,
+            Status = RunStatus.Completed,
+            ImportedRowCount = 1,
+        });
+        await db.Context.SaveChangesAsync();
+        var extra = await db.Context.ImportRuns.OrderBy(run => run.Id).LastAsync();
+        db.Context.GraduateRecords.Add(new AccessibleSchoolReports.Domain.Entities.GraduateRecord
+        {
+            ImportRunId = extra.Id,
+            SchoolId = await db.Context.Schools.Select(school => school.Id).SingleAsync(),
+            Sex3 = "F",
+        });
+        await db.Context.SaveChangesAsync();
+
+        var removed = await GraduateDuplicateCleanup.ApplyAsync(db.Context);
+
+        Assert.Equal(1, removed);
         Assert.Equal(1, await db.Context.ImportRuns.CountAsync());
         Assert.Equal(1, await db.Context.GraduateRecords.CountAsync());
     }

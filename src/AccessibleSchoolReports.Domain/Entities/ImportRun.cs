@@ -10,6 +10,11 @@ public sealed class ImportRun
 
     public string? ContentSha256 { get; set; }
 
+    /// <summary>
+    /// Hash of the imported graduate row set. Rejects a re-saved workbook with the same rows.
+    /// </summary>
+    public string? RowSetSha256 { get; set; }
+
     public DateTimeOffset StartedUtc { get; set; }
 
     public DateTimeOffset? CompletedUtc { get; set; }

@@ -37,6 +37,15 @@ public static class KnowledgeStartup
                 ingested.SkippedUnchanged.Count,
                 ingested.Missing.Count);
 
+            var pdfKnowledge = scope.ServiceProvider.GetRequiredService<IPdfKnowledgeIngestionService>();
+            var backfill = await pdfKnowledge.IndexCompletedReportsAsync(cancellationToken);
+            logger?.LogInformation(
+                "Generated PDF knowledge backfill finished. Indexed={Indexed} Reindexed={Reindexed} Skipped={Skipped} Failed={Failed}",
+                backfill.Indexed,
+                backfill.Reindexed,
+                backfill.Skipped,
+                backfill.Failed);
+
             var index = scope.ServiceProvider.GetRequiredService<IKnowledgeEmbeddingIndexService>();
             var result = await index.IndexPendingEmbeddingsAsync(StartupAdmin(), cancellationToken);
             logger?.LogInformation(
@@ -45,7 +54,8 @@ public static class KnowledgeStartup
                 result.ChunksSkipped,
                 result.Failures);
             return new KnowledgePrepareResult(
-                ingested.Indexed.Count + ingested.Reindexed.Count + ingested.SkippedUnchanged.Count,
+                ingested.Indexed.Count + ingested.Reindexed.Count + ingested.SkippedUnchanged.Count
+                    + backfill.Indexed + backfill.Reindexed + backfill.Skipped,
                 result.ChunksIndexed,
                 result.Failures,
                 Error: null);

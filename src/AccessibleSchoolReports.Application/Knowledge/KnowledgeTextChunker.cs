@@ -18,6 +18,62 @@ public static class KnowledgeTextChunker
     public const int MaxChunkLines = 50;
     public const int MaxChunkCharacters = 2000;
 
+    public static IReadOnlyList<KnowledgeTextChunk> ChunkGeneratedReportPages(
+        IReadOnlyList<PdfExtractedPage> pages,
+        string? schoolCode,
+        int? reportYear,
+        string? schoolName = null)
+    {
+        ArgumentNullException.ThrowIfNull(pages);
+        var label = FormatReportLabel(schoolCode, reportYear, schoolName);
+        var chunks = new List<KnowledgeTextChunk>();
+        foreach (var page in pages.OrderBy(item => item.PageNumber))
+        {
+            if (string.IsNullOrWhiteSpace(page.Text))
+            {
+                continue;
+            }
+
+            var lines = NormalizeLines(page.Text.Trim());
+            if (lines.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (var piece in SplitOversized(lines, (0, lines.Length - 1)))
+            {
+                var body = Join(lines, piece.Start, piece.End);
+                if (string.IsNullOrWhiteSpace(body))
+                {
+                    continue;
+                }
+
+                chunks.Add(new KnowledgeTextChunk(
+                    chunks.Count + 1,
+                    $"{label}, page {page.PageNumber}{Environment.NewLine}{body}",
+                    null,
+                    "report",
+                    piece.Start == 0 && piece.End == lines.Length - 1
+                        ? $"page {page.PageNumber}"
+                        : $"page {page.PageNumber}, lines {piece.Start + 1}-{piece.End + 1}"));
+            }
+        }
+
+        return chunks;
+    }
+
+    public static string FormatReportLabel(string? schoolCode, int? reportYear, string? schoolName = null)
+    {
+        var school = string.IsNullOrWhiteSpace(schoolCode) ? "unknown" : schoolCode.Trim();
+        var year = reportYear is > 0 ? reportYear.Value.ToString() : "unknown";
+        if (string.IsNullOrWhiteSpace(schoolName))
+        {
+            return $"[School {school}, Class of {year}]";
+        }
+
+        return $"[School {school} {schoolName.Trim()}, Class of {year}]";
+    }
+
     public static IReadOnlyList<KnowledgeTextChunk> ChunkPages(IReadOnlyList<PdfExtractedPage> pages)
     {
         ArgumentNullException.ThrowIfNull(pages);

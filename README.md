@@ -805,6 +805,8 @@ Startup runs `MigrateAsync` and ensures roles. If a local database predates Iden
 dotnet run --project src/AccessibleSchoolReports.Web --launch-profile https
 ```
 
+The UI is a React SPA in `src/web`. For a live reload during UI work, also run `npm install` and `npm run dev` there (Vite proxies `/api`, `/account`, and `/downloads` to Kestrel). For a single process, run `npm run build` in `src/web` then open Kestrel.
+
 Open **https://localhost:7117** (also http://localhost:5017, which redirects).
 
 1. Sign in

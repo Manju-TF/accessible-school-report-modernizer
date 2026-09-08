@@ -1,6 +1,11 @@
 using AccessibleSchoolReports.Application.Knowledge;
+using AccessibleSchoolReports.Application.Reporting;
+using AccessibleSchoolReports.Domain.Entities;
+using AccessibleSchoolReports.Domain.Knowledge;
+using AccessibleSchoolReports.Domain.Persistence;
 using AccessibleSchoolReports.Infrastructure.Embeddings;
 using AccessibleSchoolReports.Infrastructure.Knowledge;
+using AccessibleSchoolReports.Infrastructure.Pdf;
 using AccessibleSchoolReports.Infrastructure.Persistence;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +41,25 @@ public sealed class KnowledgeStartupTests
         Assert.Equal(0, await db.KnowledgeDocuments.CountAsync());
     }
 
+    [Fact]
+    public async Task Prepare_BackfillsCompletedGeneratedReports()
+    {
+        await using var fixture = await StartupFixture.CreateAsync(withGeneratedPdf: true);
+        var prepare = await KnowledgeStartup.PrepareAsync(fixture.Services, fixture.Root, "Development");
+        Assert.Null(prepare.Error);
+
+        await using var db = await fixture.CreateDbAsync();
+        var report = await db.KnowledgeDocuments
+            .Include(document => document.Chunks)
+            .SingleAsync(document => document.DocumentType == KnowledgeDocumentType.GeneratedReport);
+        Assert.Equal("10701", report.SchoolCode);
+        Assert.Equal(2025, report.ReportYear);
+        Assert.Contains(
+            report.Chunks,
+            chunk => chunk.Content.StartsWith("[School 10701", StringComparison.Ordinal)
+                && chunk.Embedding is { Length: > 0 });
+    }
+
     private sealed class StartupFixture : IAsyncDisposable
     {
         private readonly string _directory;
@@ -54,10 +78,11 @@ public sealed class KnowledgeStartupTests
             _provider = provider;
         }
 
-        public static async Task<StartupFixture> CreateAsync()
+        public static async Task<StartupFixture> CreateAsync(bool withGeneratedPdf = false)
         {
             var directory = Path.Combine(Path.GetTempPath(), "asr-knowledge-startup", Guid.NewGuid().ToString("N"));
             var root = Path.Combine(directory, "repo");
+            var outputRoot = Path.Combine(directory, "output");
             Directory.CreateDirectory(Path.Combine(root, "legacy", "sas"));
             Directory.CreateDirectory(Path.Combine(root, "docs", "capstone"));
             File.WriteAllText(Path.Combine(root, "AccessibleSchoolReports.sln"), string.Empty);
@@ -83,7 +108,11 @@ public sealed class KnowledgeStartupTests
             }.ToString();
             var services = new ServiceCollection();
             services.AddLogging();
-            services.AddSchoolReportsPersistence(connectionString);
+            services.AddSchoolReportsPersistence(connectionString, options =>
+            {
+                options.OutputRoot = outputRoot;
+                options.ClassYear = "2025";
+            });
             services.AddSchoolReportsEmbeddings(options =>
             {
                 options.Provider = "Lexical";
@@ -94,6 +123,43 @@ public sealed class KnowledgeStartupTests
             await using (var db = provider.GetRequiredService<IDbContextFactory<SchoolReportsDbContext>>().CreateDbContext())
             {
                 await db.MigrateAsync();
+                if (withGeneratedPdf)
+                {
+                    var pdfPath = Path.Combine(outputRoot, "2025", "10701", "summary-report.pdf");
+                    Directory.CreateDirectory(Path.GetDirectoryName(pdfPath)!);
+                    var report = new SchoolReport
+                    {
+                        SchoolCode = "10701",
+                        SchoolName = "School A",
+                        Rows = [new() { Analvar = "A", Newvar = "A", Count = 5, Percent = 100m }],
+                        Sections = [new() { Analvar = "A", Details = [], SubtotalCount = 5, SubtotalPercent = 100m }],
+                    };
+                    await using (var stream = File.Create(pdfPath))
+                    {
+                        new QuestPdfAccessiblePdfGenerator().Generate(report, stream);
+                    }
+
+                    var school = new School { Code = "10701", Name = "School A" };
+                    db.Schools.Add(school);
+                    await db.SaveChangesAsync();
+                    var run = new ReportRun
+                    {
+                        Mode = ReportGenerationMode.Single,
+                        Status = RunStatus.Completed,
+                        StartedUtc = DateTimeOffset.UtcNow,
+                        OutputDirectory = Path.Combine(outputRoot, "2025"),
+                    };
+                    db.ReportRuns.Add(run);
+                    await db.SaveChangesAsync();
+                    db.ReportRunItems.Add(new ReportRunItem
+                    {
+                        ReportRunId = run.Id,
+                        SchoolId = school.Id,
+                        Status = RunStatus.Completed,
+                        OutputPath = pdfPath,
+                    });
+                    await db.SaveChangesAsync();
+                }
             }
 
             return new StartupFixture(directory, root, provider);

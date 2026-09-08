@@ -61,10 +61,12 @@ public sealed class SchoolReportsDbContext : IdentityDbContext<IdentityUser>
             entity.HasKey(e => e.Id);
             entity.Property(e => e.FileName).HasMaxLength(512);
             entity.Property(e => e.ContentSha256).HasMaxLength(64);
+            entity.Property(e => e.RowSetSha256).HasMaxLength(64);
             entity.Property(e => e.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(e => e.Message).HasMaxLength(2000);
             entity.HasIndex(e => e.StartedUtc);
             entity.HasIndex(e => e.ContentSha256);
+            entity.HasIndex(e => e.RowSetSha256);
         });
 
         modelBuilder.Entity<ImportRowIssue>(entity =>
@@ -103,6 +105,8 @@ public sealed class SchoolReportsDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.SchoolFund).HasMaxLength(16);
             entity.Property(e => e.Emptype1).HasMaxLength(16);
             entity.Property(e => e.SalFtPerm).HasPrecision(12, 2);
+
+            entity.HasIndex(e => e.ClassYear);
 
             entity.HasOne(e => e.School)
                 .WithMany(s => s.Graduates)

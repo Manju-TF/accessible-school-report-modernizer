@@ -63,7 +63,7 @@ public sealed class PdfKnowledgeIngestionService : IPdfKnowledgeIngestionService
         var existing = await db.KnowledgeDocuments
             .Include(document => document.Chunks)
             .FirstOrDefaultAsync(document => document.ReportId == item.Id, cancellationToken);
-        if (existing is not null && existing.ContentHash == hash)
+        if (existing is not null && existing.ContentHash == hash && HasCurrentReportChunkFormat(existing))
         {
             return PdfKnowledgeIngestionResult.From(
                 PdfKnowledgeIngestionStatus.SkippedDuplicate,
@@ -87,18 +87,22 @@ public sealed class PdfKnowledgeIngestionService : IPdfKnowledgeIngestionService
             return PdfKnowledgeIngestionResult.From(PdfKnowledgeIngestionStatus.ExtractionFailed, message: extracted.Message);
         }
 
-        var chunks = KnowledgeTextChunker.ChunkPages(extracted.Pages);
+        var now = DateTimeOffset.UtcNow;
+        var schoolCode = item.School.Code;
+        var reportYear = request.ReportYear
+            ?? (GeneratedReportPath.TryParseClassYear(item.OutputPath, out var pathYear) ? pathYear : (int?)null)
+            ?? (int.TryParse(_options.ClassYear, out var year) ? year : 2025);
+        var chunks = KnowledgeTextChunker.ChunkGeneratedReportPages(
+            extracted.Pages,
+            schoolCode,
+            reportYear,
+            item.School.Name);
         if (chunks.Count == 0)
         {
             return PdfKnowledgeIngestionResult.From(
                 PdfKnowledgeIngestionStatus.ExtractionFailed,
                 message: "No indexable text was produced from the generated PDF.");
         }
-
-        var now = DateTimeOffset.UtcNow;
-        var schoolCode = item.School.Code;
-        var reportYear = request.ReportYear
-            ?? (int.TryParse(_options.ClassYear, out var year) ? year : 2025);
         var reportType = string.IsNullOrWhiteSpace(request.ReportType)
             ? GeneratedPdfKnowledgeRequest.DefaultReportType
             : request.ReportType.Trim();
@@ -145,6 +149,74 @@ public sealed class PdfKnowledgeIngestionService : IPdfKnowledgeIngestionService
         await db.SaveChangesAsync(cancellationToken);
         return PdfKnowledgeIngestionResult.From(PdfKnowledgeIngestionStatus.Reindexed, existing.Id);
     }
+
+    public async Task<PdfKnowledgeBackfillResult> IndexCompletedReportsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+        var items = await db.ReportRunItems
+            .AsNoTracking()
+            .Include(row => row.School)
+            .Where(row => row.Status == RunStatus.Completed && !string.IsNullOrWhiteSpace(row.OutputPath))
+            .Select(row => new
+            {
+                row.Id,
+                row.ReportRunId,
+                row.SchoolId,
+                SchoolCode = row.School.Code,
+                row.OutputPath,
+            })
+            .ToListAsync(cancellationToken);
+
+        var indexed = 0;
+        var reindexed = 0;
+        var skipped = 0;
+        var failed = 0;
+        foreach (var item in items)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var year = GeneratedReportPath.TryParseClassYear(item.OutputPath, out var parsed) ? parsed : (int?)null;
+            var result = await IndexGeneratedReportAsync(
+                new GeneratedPdfKnowledgeRequest
+                {
+                    ReportRunItemId = item.Id,
+                    ReportRunId = item.ReportRunId,
+                    SchoolId = item.SchoolId,
+                    SchoolCode = item.SchoolCode,
+                    OutputPath = item.OutputPath,
+                    ReportYear = year,
+                },
+                cancellationToken);
+            switch (result.Status)
+            {
+                case PdfKnowledgeIngestionStatus.Indexed:
+                    indexed++;
+                    break;
+                case PdfKnowledgeIngestionStatus.Reindexed:
+                    reindexed++;
+                    break;
+                case PdfKnowledgeIngestionStatus.SkippedDuplicate:
+                    skipped++;
+                    break;
+                default:
+                    failed++;
+                    break;
+            }
+        }
+
+        return new PdfKnowledgeBackfillResult
+        {
+            Indexed = indexed,
+            Reindexed = reindexed,
+            Skipped = skipped,
+            Failed = failed,
+        };
+    }
+
+    internal static bool HasCurrentReportChunkFormat(KnowledgeDocument document) =>
+        document.Chunks.Count > 0
+        && document.Chunks.All(chunk =>
+            chunk.Content.StartsWith("[School ", StringComparison.Ordinal));
 
     private static void AddChunks(
         KnowledgeDocument document,

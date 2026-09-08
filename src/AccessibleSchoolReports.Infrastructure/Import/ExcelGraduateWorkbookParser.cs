@@ -1,5 +1,6 @@
 using System.Globalization;
 using AccessibleSchoolReports.Application.Imports;
+using AccessibleSchoolReports.Application.Reporting;
 using ClosedXML.Excel;
 
 namespace AccessibleSchoolReports.Infrastructure.Import;
@@ -124,7 +125,7 @@ internal static class ExcelGraduateWorkbookParser
                         continue;
                     }
 
-                    if (name == GraduateImportColumns.SalFtPerm)
+                    if (name == GraduateImportColumns.SalFtPerm || name == GraduateImportColumns.ClassYear)
                     {
                         continue;
                     }
@@ -180,6 +181,7 @@ internal static class ExcelGraduateWorkbookParser
                     SchoolFund = texts[GraduateImportColumns.SchoolFund],
                     SalFtPerm = salary,
                     Emptype1 = texts.GetValueOrDefault(GraduateImportColumns.Emptype1),
+                    ClassYear = ReadClassYear(cells),
                 });
             }
 
@@ -190,6 +192,16 @@ internal static class ExcelGraduateWorkbookParser
                 BlankRowCount = blankRowCount,
             };
         }
+    }
+
+    private static int? ReadClassYear(IReadOnlyDictionary<string, IXLCell> cells)
+    {
+        if (!cells.TryGetValue(GraduateImportColumns.ClassYear, out var cell))
+        {
+            return null;
+        }
+
+        return ReportYearCatalog.TryParse(ReadText(cell), out var year) ? year : null;
     }
 
     private static bool IsBlankRow(IReadOnlyDictionary<string, IXLCell> cells)

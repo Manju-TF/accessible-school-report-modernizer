@@ -38,7 +38,9 @@ public sealed class KnowledgeAssistantService : IKnowledgeAssistantService
         }
 
         var retrieval = await _retrieval.RetrieveAsync(user, question, options, cancellationToken);
-        var request = KnowledgeGroundedPrompt.Create(question, retrieval.Hits);
+        var metricHits = retrieval.PrintedMetricHits.Count > 0 ? retrieval.PrintedMetricHits : retrieval.Hits;
+        var arithmetic = PrintedReportArithmetic.TryFormat(question, metricHits);
+        var request = KnowledgeGroundedPrompt.Create(question, retrieval.Hits, arithmetic);
         var completion = await _languageModel.CompleteAsync(request, cancellationToken);
         return new KnowledgeAssistantAnswer
         {

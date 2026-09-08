@@ -144,8 +144,7 @@ public sealed class AuthenticationFoundationTests
     public async Task SignIn_RejectsExternalReturnUrl()
     {
         var client = AuthTestHttp.CreateClient(_factory);
-        var signInPage = await client.GetAsync("/signin");
-        var token = AuthTestHttp.ReadAntiforgeryToken(await signInPage.Content.ReadAsStringAsync());
+        var token = await AuthTestHttp.GetAntiforgeryTokenAsync(client);
 
         var response = await client.PostAsync(
             "/account/signin",

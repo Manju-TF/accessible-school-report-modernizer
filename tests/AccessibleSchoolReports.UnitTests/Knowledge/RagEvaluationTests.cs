@@ -234,6 +234,23 @@ public sealed class RagEvaluationTests
                 && record.LlmContextDocuments.Count == 0
                 && NoSchoolBLeak(record),
         },
+        new()
+        {
+            Number = 12,
+            Category = "School-wise comparison",
+            Question = "Compare Total Reported across generated reports I can view.",
+            ExpectedSource = "10701-summary-report.pdf (authorized generated reports only)",
+            ExpectedRuleId = "(none)",
+            ExpectedScope = "Report for School A; never School B",
+            User = RagEvaluationFixture.Principal(RagEvaluationFixture.UserAId, AppRoles.ReportUser),
+            Options = DefaultOptions,
+            Judge = record =>
+                HasSource(record, "10701-summary-report.pdf")
+                && record.Hits.Any(hit =>
+                    hit.AuthorizationScope == KnowledgeAuthorizationScope.Report
+                    && hit.Content.Contains(RagEvaluationFixture.SchoolAMarker, StringComparison.Ordinal))
+                && NoSchoolBLeak(record),
+        },
     ];
 
     private static async Task<RagEvaluationRecord> EvaluateAsync(RagEvaluationFixture fixture, RagCase definition)
@@ -378,7 +395,7 @@ public sealed class RagEvaluationTests
         builder.AppendLine("| Retrieval / authz | Production `KnowledgeRetrievalService` + `KnowledgeAccess` + `IReportAuthorizationService` |");
         builder.AppendLine("| Assistant | Production `KnowledgeAssistantService` + `KnowledgeGroundedPrompt` |");
         builder.AppendLine("| Language model | `FakeLanguageModelService` records the exact request. Completion text is a stub, not a live answer. |");
-        builder.AppendLine("| Scoring | Top-K = 5, minimum similarity = 0.2 |");
+        builder.AppendLine("| Scoring | Top-K = 5 (15 for unscoped printed-report / comparison questions), minimum similarity = 0.2 |");
         builder.AppendLine("| Pass rule | An expected source or RuleId appears **somewhere in top-K**, not only as rank 1. Security cases also require School B text absent from hits and from the formatted LLM user message. |");
         builder.AppendLine();
         builder.AppendLine("School B chunks were embedded **before** the School A user asked questions, so a leak would have been possible if authorization failed.");

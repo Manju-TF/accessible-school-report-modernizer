@@ -12,7 +12,6 @@ public static class IdentityAuthenticationExtensions
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUserAccessor, HttpContextCurrentUserAccessor>();
-        services.AddCascadingAuthenticationState();
         services.AddIdentity<IdentityUser, IdentityRole>(options =>
             {
                 options.SignIn.RequireConfirmedAccount = false;
@@ -42,10 +41,35 @@ public static class IdentityAuthenticationExtensions
             options.LogoutPath = "/account/signout";
             options.AccessDeniedPath = "/denied";
             options.ReturnUrlParameter = "returnUrl";
+            options.Events.OnRedirectToLogin = context =>
+            {
+                if (IsApi(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
+            options.Events.OnRedirectToAccessDenied = context =>
+            {
+                if (IsApi(context.Request))
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    return Task.CompletedTask;
+                }
+
+                context.Response.Redirect(context.RedirectUri);
+                return Task.CompletedTask;
+            };
         });
 
         services.AddAuthorization(AppAuthorizationPolicies.Add);
 
         return services;
     }
+
+    private static bool IsApi(HttpRequest request) =>
+        request.Path.StartsWithSegments("/api");
 }

@@ -6,6 +6,7 @@ namespace AccessibleSchoolReports.Application.Imports;
 /// Unmapped sample columns (not persisted): bizjobtype, city1, time2, basic,
 /// level, saltype, govtjob_t, empgen_m, schst.
 /// <c>emptype1</c> is a SAS input but is not in the sample; map it when present.
+/// <c>classyear</c> is optional metadata for generation year choices.
 /// </summary>
 public static class GraduateImportColumns
 {
@@ -28,6 +29,8 @@ public static class GraduateImportColumns
     public const string SalFtPerm = "salftperm";
     public const string Emptype1 = "emptype1";
 
+    public const string ClassYear = "classyear";
+
     public static readonly IReadOnlyList<string> Required =
     [
         Code,
@@ -49,7 +52,7 @@ public static class GraduateImportColumns
         SalFtPerm,
     ];
 
-    public static readonly IReadOnlyList<string> Optional = [Emptype1];
+    public static readonly IReadOnlyList<string> Optional = [Emptype1, ClassYear];
 
     public static readonly IReadOnlyDictionary<string, int> TextMaxLengths =
         new Dictionary<string, int>(StringComparer.Ordinal)

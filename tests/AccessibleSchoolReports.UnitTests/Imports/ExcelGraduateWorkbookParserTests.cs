@@ -154,6 +154,33 @@ public sealed class ExcelGraduateWorkbookParserTests
     }
 
     [Fact]
+    public void Parse_OptionalClassYear_IsMappedWhenPresent()
+    {
+        var headers = GraduateImportColumns.Required.Concat([GraduateImportColumns.ClassYear]).ToArray();
+        var row = TestExcelWorkbook.ValidRow("10701");
+        row[GraduateImportColumns.ClassYear] = 2024;
+        using var stream = TestExcelWorkbook.Create(headers, row);
+
+        var parsed = ExcelGraduateWorkbookParser.Parse(stream);
+
+        Assert.Equal(2024, Assert.Single(parsed.ValidRows).ClassYear);
+    }
+
+    [Fact]
+    public void Parse_InvalidClassYear_IsIgnored()
+    {
+        var headers = GraduateImportColumns.Required.Concat([GraduateImportColumns.ClassYear]).ToArray();
+        var row = TestExcelWorkbook.ValidRow("10701");
+        row[GraduateImportColumns.ClassYear] = "next-year";
+        using var stream = TestExcelWorkbook.Create(headers, row);
+
+        var parsed = ExcelGraduateWorkbookParser.Parse(stream);
+
+        Assert.Null(Assert.Single(parsed.ValidRows).ClassYear);
+        Assert.Empty(parsed.RowIssues);
+    }
+
+    [Fact]
     public void Parse_OptionalEmptype1_IsMappedWhenPresent()
     {
         var headers = GraduateImportColumns.Required.Concat([GraduateImportColumns.Emptype1]).ToArray();

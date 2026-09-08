@@ -25,6 +25,12 @@ public sealed class LanguageModelRequest
     public required string UserQuestion { get; init; }
 
     public required IReadOnlyList<LanguageModelContextDocument> ContextDocuments { get; init; }
+
+    /// <summary>
+    /// Application-computed sums and differences of printed PDF values.
+    /// Not SAS calculator output. Omitted when the question is not arithmetic.
+    /// </summary>
+    public string? PrintedArithmetic { get; init; }
 }
 
 public sealed class LanguageModelContextDocument
@@ -36,6 +42,10 @@ public sealed class LanguageModelContextDocument
     public required string SourceIdentifier { get; init; }
 
     public string? RuleId { get; init; }
+
+    public string? SchoolCode { get; init; }
+
+    public int? ReportYear { get; init; }
 
     public required string Content { get; init; }
 }

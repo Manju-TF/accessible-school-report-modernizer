@@ -43,6 +43,10 @@ public sealed class PdfKnowledgeIngestionServiceTests
         Assert.NotEmpty(document.Chunks);
         Assert.Contains(document.Chunks, chunk => chunk.SourceLocation.StartsWith("page ", StringComparison.Ordinal));
         Assert.Contains(document.Chunks, chunk => chunk.Content.Contains("Class of 2025", StringComparison.Ordinal));
+        Assert.Contains(document.Chunks, chunk => chunk.Content.Contains("Total Reported", StringComparison.Ordinal));
+        Assert.Contains(
+            document.Chunks,
+            chunk => chunk.Content.StartsWith("[School 10701", StringComparison.Ordinal));
         Assert.All(document.Chunks, chunk => Assert.Null(chunk.Embedding));
 
         var documentType = fixture.Db.Model.FindEntityType(typeof(KnowledgeDocument));
@@ -66,7 +70,7 @@ public sealed class PdfKnowledgeIngestionServiceTests
     public async Task ChangedPdf_ReindexesChunks()
     {
         await using var fixture = await Fixture.CreateAsync();
-        var first = await fixture.IngestAsync();
+        var first = await IngestUntilIndexedAsync(fixture, "School A Report");
         WritePdf(fixture.PdfPath, schoolName: "Changed School Name");
 
         var result = await fixture.IngestAsync();
@@ -144,6 +148,49 @@ public sealed class PdfKnowledgeIngestionServiceTests
     }
 
     [Fact]
+    public async Task IndexCompletedReports_IndexesMissingCompletedPdfs()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        Assert.Empty(await fixture.Db.KnowledgeDocuments.ToListAsync());
+
+        var result = await fixture.BackfillAsync();
+
+        Assert.Equal(1, result.Indexed);
+        Assert.Equal(0, result.Failed);
+        var document = await fixture.Db.KnowledgeDocuments.Include(row => row.Chunks).SingleAsync();
+        Assert.Equal(KnowledgeDocumentType.GeneratedReport, document.DocumentType);
+        Assert.Contains(
+            document.Chunks,
+            chunk => chunk.Content.StartsWith("[School 10701", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UnchangedHash_ReindexesOldChunkFormat()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var first = await fixture.IngestAsync();
+        Assert.Equal(PdfKnowledgeIngestionStatus.Indexed, first.Status);
+
+        var document = await fixture.Db.KnowledgeDocuments.Include(row => row.Chunks).SingleAsync();
+        foreach (var chunk in document.Chunks)
+        {
+            var newline = chunk.Content.IndexOf('\n');
+            chunk.Content = newline >= 0 ? chunk.Content[(newline + 1)..] : "Total Reported without school prefix";
+        }
+
+        await fixture.Db.SaveChangesAsync();
+        fixture.Db.ChangeTracker.Clear();
+
+        var result = await fixture.IngestAsync();
+
+        Assert.Equal(PdfKnowledgeIngestionStatus.Reindexed, result.Status);
+        var updated = await fixture.Db.KnowledgeDocuments.Include(row => row.Chunks).SingleAsync();
+        Assert.Contains(
+            updated.Chunks,
+            chunk => chunk.Content.StartsWith("[School 10701", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task SchoolAndReportAssociation_MatchStoredRunItem()
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -159,6 +206,27 @@ public sealed class PdfKnowledgeIngestionServiceTests
         Assert.Equal(fixture.Item.Id, document.Report!.Id);
         Assert.Equal(fixture.Run.Id, document.ReportRun!.Id);
         Assert.Equal(fixture.Item.SchoolId, document.Report.SchoolId);
+    }
+
+    private static async Task<PdfKnowledgeIngestionResult> IngestUntilIndexedAsync(Fixture fixture, string schoolName)
+    {
+        PdfKnowledgeIngestionResult? result = null;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            if (attempt > 0)
+            {
+                WritePdf(fixture.PdfPath, schoolName);
+            }
+
+            result = await fixture.IngestAsync();
+            if (result.Status is PdfKnowledgeIngestionStatus.Indexed or PdfKnowledgeIngestionStatus.SkippedDuplicate)
+            {
+                return result;
+            }
+        }
+
+        Assert.Equal(PdfKnowledgeIngestionStatus.Indexed, result!.Status);
+        return result;
     }
 
     private static void WritePdf(string path, string schoolName)
@@ -218,6 +286,15 @@ public sealed class PdfKnowledgeIngestionServiceTests
 
         public Task<PdfKnowledgeIngestionResult> IngestAsync() =>
             IngestAsync(Item.Id, School.Id, School.Code);
+
+        public async Task<PdfKnowledgeBackfillResult> BackfillAsync()
+        {
+            var options = Options.Create(new ReportGenerationOptions { OutputRoot = OutputRoot, ClassYear = "2025" });
+            var ingestion = new PdfKnowledgeIngestionService(new Factory(_dbOptions), _extractor, options);
+            var result = await ingestion.IndexCompletedReportsAsync();
+            Db.ChangeTracker.Clear();
+            return result;
+        }
 
         public async Task<PdfKnowledgeIngestionResult> IngestAsync(int itemId, int schoolId, string schoolCode)
         {

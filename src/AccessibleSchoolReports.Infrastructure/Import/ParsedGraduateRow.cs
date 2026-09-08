@@ -39,4 +39,6 @@ internal sealed class ParsedGraduateRow
     public decimal? SalFtPerm { get; init; }
 
     public string? Emptype1 { get; init; }
+
+    public int? ClassYear { get; init; }
 }

@@ -530,7 +530,9 @@ public sealed class ReportGenerationService : IReportGenerationService
                     SchoolId = result.SchoolId,
                     SchoolCode = result.SchoolCode,
                     OutputPath = result.OutputPath,
-                    ReportYear = int.TryParse(ResolveClassYear(null), out var year) ? year : 2025,
+                    ReportYear = GeneratedReportPath.TryParseClassYear(result.OutputPath, out var year)
+                        ? year
+                        : (int.TryParse(ResolveClassYear(null), out var fallback) ? fallback : 2025),
                     ReportType = GeneratedPdfKnowledgeRequest.DefaultReportType,
                 },
                 CancellationToken.None);

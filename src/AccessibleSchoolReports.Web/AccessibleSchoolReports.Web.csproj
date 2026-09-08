@@ -23,6 +23,12 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>a8c4e2f1-6d3b-4a19-9e07-5b2c1d8f0a44</UserSecretsId>
+    <SpaRoot>..\web\</SpaRoot>
   </PropertyGroup>
+
+  <Target Name="PublishReactSpa" BeforeTargets="ComputeFilesToPublish" Condition="Exists('$(SpaRoot)package.json')">
+    <Exec Command="npm ci" WorkingDirectory="$(SpaRoot)" Condition="!Exists('$(SpaRoot)node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(SpaRoot)" />
+  </Target>
 
 </Project>

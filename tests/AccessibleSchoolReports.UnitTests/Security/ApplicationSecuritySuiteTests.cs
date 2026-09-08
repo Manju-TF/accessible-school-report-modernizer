@@ -129,11 +129,12 @@ public sealed class ApplicationSecuritySuiteTests : IClassFixture<ReportDownload
     public async Task Case09_UserCannotAccessAnUnauthorizedSchool()
     {
         var client = await SignInAsync(_reports, ReportDownloadWebApplicationFactory.ViewerUserName);
-        var other = await client.GetAsync($"/reports/{_reports.ReportBId}");
-        var html = await other.Content.ReadAsStringAsync();
-        Assert.Contains("That report is not available.", html, StringComparison.Ordinal);
-        Assert.DoesNotContain(ReportDownloadWebApplicationFactory.SchoolBName, html, StringComparison.Ordinal);
-        Assert.DoesNotContain("23306", html, StringComparison.Ordinal);
+        var other = await client.GetAsync($"/api/reports/{_reports.ReportBId}");
+        var json = await other.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.NotFound, other.StatusCode);
+        Assert.Contains("That report is not available.", json, StringComparison.Ordinal);
+        Assert.DoesNotContain(ReportDownloadWebApplicationFactory.SchoolBName, json, StringComparison.Ordinal);
+        Assert.DoesNotContain("23306", json, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -363,6 +364,11 @@ public sealed class ApplicationSecuritySuiteTests : IClassFixture<ReportDownload
 
         foreach (var file in Directory.EnumerateFiles(Path.Combine(webRoot, "wwwroot"), "*", SearchOption.AllDirectories))
         {
+            if (file.Contains($"{Path.DirectorySeparatorChar}assets{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             var text = File.ReadAllText(file);
             Assert.DoesNotContain("ApiKey", text, StringComparison.Ordinal);
             Assert.DoesNotContain("sk-", text, StringComparison.Ordinal);

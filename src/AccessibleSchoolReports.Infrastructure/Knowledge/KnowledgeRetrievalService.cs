@@ -95,17 +95,45 @@ public sealed class KnowledgeRetrievalService : IKnowledgeRetrievalService
         }
 
         var query = await _embeddings.EmbedQueryAsync(question, cancellationToken);
-        var hits = candidates
+        var reportScoped = settings.ReportId is int;
+        var prefersPrintedReports = KnowledgeQuestionIntent.PrefersPrintedReportEvidence(question);
+        var minimumSimilarity = reportScoped && prefersPrintedReports
+            ? 0f
+            : settings.MinimumSimilarity;
+        var ranked = candidates
             .Select(chunk => Score(chunk, query.Values))
-            .Where(hit => hit.Similarity >= settings.MinimumSimilarity)
-            .OrderByDescending(hit => hit.Similarity)
+            .Where(hit => hit.Similarity >= minimumSimilarity)
+            .OrderByDescending(hit => !reportScoped && prefersPrintedReports && hit.DocumentType == KnowledgeDocumentType.GeneratedReport)
+            .ThenByDescending(hit => hit.Similarity)
             .ThenBy(hit => hit.ChunkId)
-            .Take(settings.TopK)
             .ToList();
+        var topK = settings.TopK;
+        if (settings.TopK == KnowledgeRetrievalOptions.DefaultTopK)
+        {
+            if (reportScoped)
+            {
+                topK = KnowledgeRetrievalOptions.DefaultReportTopK;
+            }
+            else if (prefersPrintedReports)
+            {
+                topK = KnowledgeRetrievalOptions.DefaultGlobalTopK;
+            }
+        }
+
+        var hits = !reportScoped && prefersPrintedReports
+            ? Diversify(ranked, topK, KnowledgeRetrievalOptions.MaxChunksPerReport)
+            : ranked.Take(topK).ToList();
+        var printedMetricHits = KnowledgeQuestionIntent.AsksForPrintedArithmetic(question)
+            ? candidates
+                .Where(chunk => chunk.KnowledgeDocument.DocumentType == KnowledgeDocumentType.GeneratedReport)
+                .Select(chunk => Score(chunk, query.Values))
+                .ToList()
+            : [];
 
         return new KnowledgeRetrievalResult
         {
             Hits = hits,
+            PrintedMetricHits = printedMetricHits,
             AuthorizedCandidateCount = candidates.Count,
             Duration = DateTimeOffset.UtcNow - started,
         };
@@ -152,6 +180,63 @@ public sealed class KnowledgeRetrievalService : IKnowledgeRetrievalService
         }
 
         return ids;
+    }
+
+    internal static IReadOnlyList<KnowledgeRetrievalHit> Diversify(
+        IReadOnlyList<KnowledgeRetrievalHit> ranked,
+        int topK,
+        int maxPerDocument = 3)
+    {
+        if (ranked.Count == 0 || topK <= 0)
+        {
+            return [];
+        }
+
+        var perDocumentLimit = Math.Max(1, maxPerDocument);
+        var selected = new List<KnowledgeRetrievalHit>(Math.Min(topK, ranked.Count));
+        var seenDocuments = new HashSet<int>();
+        foreach (var hit in ranked)
+        {
+            if (selected.Count >= topK)
+            {
+                break;
+            }
+
+            if (seenDocuments.Add(hit.DocumentId))
+            {
+                selected.Add(hit);
+            }
+        }
+
+        var perDocument = selected
+            .GroupBy(hit => hit.DocumentId)
+            .ToDictionary(group => group.Key, group => group.Count());
+        foreach (var hit in ranked)
+        {
+            if (selected.Count >= topK)
+            {
+                break;
+            }
+
+            if (selected.Contains(hit))
+            {
+                continue;
+            }
+
+            perDocument.TryGetValue(hit.DocumentId, out var count);
+            if (count >= perDocumentLimit)
+            {
+                continue;
+            }
+
+            selected.Add(hit);
+            perDocument[hit.DocumentId] = count + 1;
+        }
+
+        return selected
+            .OrderByDescending(hit => hit.Similarity)
+            .ThenBy(hit => hit.ChunkId)
+            .ToList();
     }
 
     private static KnowledgeRetrievalHit Score(KnowledgeChunk chunk, float[] query)

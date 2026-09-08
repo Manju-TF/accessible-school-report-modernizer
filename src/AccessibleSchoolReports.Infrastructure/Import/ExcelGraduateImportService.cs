@@ -34,32 +34,24 @@ public sealed class ExcelGraduateImportService : IGraduateImportService
             ? null
             : Path.GetFileName(fileName);
 
-        var duplicate = await _db.ImportRuns
-            .AsNoTracking()
-            .Where(run =>
-                run.ContentSha256 == contentSha256
-                && run.ImportedRowCount > 0
-                && (run.Status == RunStatus.Completed || run.Status == RunStatus.CompletedWithErrors))
-            .OrderBy(run => run.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-
+        var duplicate = await FindSuccessfulImportAsync(contentSha256, rowSetSha256: null, cancellationToken);
         if (duplicate is not null)
         {
-            return new GraduateImportResult
-            {
-                ImportRunId = duplicate.Id,
-                Status = duplicate.Status,
-                ImportedRowCount = duplicate.ImportedRowCount,
-                InvalidRowCount = duplicate.InvalidRowCount,
-                BlankRowCount = duplicate.BlankRowCount,
-                WasDuplicate = true,
-                DuplicateOfImportRunId = duplicate.Id,
-                Message = $"This file was already imported as ImportRun {duplicate.Id}.",
-                Issues = [],
-            };
+            return await RejectDuplicateAsync(duplicate, buffer, cancellationToken);
         }
 
         var parsed = ExcelGraduateWorkbookParser.Parse(buffer);
+        var rowSetSha256 = parsed.ValidRows.Count == 0
+            ? null
+            : GraduateRowFingerprint.ComputeSet(parsed.ValidRows.Select(Fingerprint));
+        if (rowSetSha256 is not null)
+        {
+            duplicate = await FindSuccessfulImportAsync(contentSha256: null, rowSetSha256, cancellationToken);
+            if (duplicate is not null)
+            {
+                return await RejectDuplicateAsync(duplicate, buffer, cancellationToken);
+            }
+        }
         var startedUtc = DateTimeOffset.UtcNow;
 
         await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
@@ -67,6 +59,7 @@ public sealed class ExcelGraduateImportService : IGraduateImportService
         {
             FileName = safeFileName,
             ContentSha256 = contentSha256,
+            RowSetSha256 = rowSetSha256,
             StartedUtc = startedUtc,
             Status = RunStatus.Running,
         };
@@ -140,6 +133,7 @@ public sealed class ExcelGraduateImportService : IGraduateImportService
                 SchoolFund = row.SchoolFund,
                 SalFtPerm = row.SalFtPerm,
                 Emptype1 = row.Emptype1,
+                ClassYear = row.ClassYear,
             });
         }
 
@@ -160,6 +154,67 @@ public sealed class ExcelGraduateImportService : IGraduateImportService
         await transaction.CommitAsync(cancellationToken);
         return ToResult(importRun, parsed.FileIssues.Concat(parsed.RowIssues).ToList(), wasDuplicate: false);
     }
+
+    private async Task<ImportRun?> FindSuccessfulImportAsync(
+        string? contentSha256,
+        string? rowSetSha256,
+        CancellationToken cancellationToken)
+    {
+        return await _db.ImportRuns
+            .AsNoTracking()
+            .Where(run =>
+                run.ImportedRowCount > 0
+                && (run.Status == RunStatus.Completed || run.Status == RunStatus.CompletedWithErrors)
+                && ((contentSha256 != null && run.ContentSha256 == contentSha256)
+                    || (rowSetSha256 != null && run.RowSetSha256 == rowSetSha256)))
+            .OrderBy(run => run.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
+    private async Task<GraduateImportResult> RejectDuplicateAsync(
+        ImportRun duplicate,
+        MemoryStream buffer,
+        CancellationToken cancellationToken)
+    {
+        buffer.Position = 0;
+        var filled = await GraduateClassYearBackfill.ApplyAsync(_db, duplicate.Id, buffer, cancellationToken);
+        return new GraduateImportResult
+        {
+            ImportRunId = duplicate.Id,
+            Status = duplicate.Status,
+            ImportedRowCount = duplicate.ImportedRowCount,
+            InvalidRowCount = duplicate.InvalidRowCount,
+            BlankRowCount = duplicate.BlankRowCount,
+            WasDuplicate = true,
+            DuplicateOfImportRunId = duplicate.Id,
+            Message = filled > 0
+                ? $"This file was already imported as ImportRun {duplicate.Id}. Class years were filled from the workbook."
+                : $"This file was already imported as ImportRun {duplicate.Id}. Duplicate rows were not stored.",
+            Issues = [],
+        };
+    }
+
+    private static string Fingerprint(ParsedGraduateRow row) =>
+        GraduateRowFingerprint.Compute(
+            row.SchoolCode,
+            row.ClassYear,
+            row.Sex3,
+            row.Minstat,
+            row.Jobcat1,
+            row.JobFtPt,
+            row.Empgen,
+            row.Firm1,
+            row.Lfjob,
+            row.Jobreg,
+            row.LocationFlag,
+            row.Jobst,
+            row.Source,
+            row.Time1,
+            row.Status,
+            row.Duration,
+            row.SchoolFund,
+            row.SalFtPerm,
+            row.Emptype1);
 
     private void PersistIssues(int importRunId, IEnumerable<ImportValidationIssue> issues)
     {

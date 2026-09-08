@@ -19,6 +19,12 @@ public sealed class KnowledgeRetrievalOptions
 {
     public const int DefaultTopK = 5;
 
+    public const int DefaultGlobalTopK = 21;
+
+    public const int DefaultReportTopK = 21;
+
+    public const int MaxChunksPerReport = 9;
+
     public const float DefaultMinimumSimilarity = 0.2f;
 
     public const int MaxQuestionLength = 4000;
@@ -37,6 +43,8 @@ public sealed class KnowledgeRetrievalOptions
 public sealed class KnowledgeRetrievalResult
 {
     public required IReadOnlyList<KnowledgeRetrievalHit> Hits { get; init; }
+
+    public IReadOnlyList<KnowledgeRetrievalHit> PrintedMetricHits { get; init; } = [];
 
     public int AuthorizedCandidateCount { get; init; }
 

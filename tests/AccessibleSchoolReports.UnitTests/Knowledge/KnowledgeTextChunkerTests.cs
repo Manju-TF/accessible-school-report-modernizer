@@ -81,4 +81,62 @@ public sealed class KnowledgeTextChunkerTests
         Assert.Contains("proc format", string.Join('\n', chunks.Select(chunk => chunk.Content)), StringComparison.OrdinalIgnoreCase);
         Assert.Null(chunks[0].RuleId);
     }
+
+    [Fact]
+    public void ChunkGeneratedReportPages_PrefixesSchoolAndYear()
+    {
+        var chunks = KnowledgeTextChunker.ChunkGeneratedReportPages(
+            [new PdfExtractedPage(1, "Total Reported 42\nEmployed 30")],
+            "10701",
+            2025,
+            "School A");
+
+        var chunk = Assert.Single(chunks);
+        Assert.StartsWith("[School 10701 School A, Class of 2025], page 1", chunk.Content, StringComparison.Ordinal);
+        Assert.Contains("Total Reported 42", chunk.Content, StringComparison.Ordinal);
+        Assert.Equal("report", chunk.Category);
+        Assert.Equal("page 1", chunk.SourceLocation);
+    }
+
+    [Fact]
+    public void ChunkGeneratedReportPages_KeepsHashLabelsWithNumbers()
+    {
+        var chunks = KnowledgeTextChunker.ChunkGeneratedReportPages(
+            [
+                new PdfExtractedPage(
+                    5,
+                    """
+                    Jobs Taken by Region:
+                    New England 15 78.9
+                    # States and Territories with Employed Grads:
+                    3 100.0
+                    Total # 3
+                    """),
+            ],
+            "10701",
+            2025);
+
+        var chunk = Assert.Single(chunks);
+        Assert.StartsWith("[School 10701, Class of 2025], page 5", chunk.Content, StringComparison.Ordinal);
+        Assert.Contains("# States and Territories with Employed Grads:", chunk.Content, StringComparison.Ordinal);
+        Assert.Contains("3 100.0", chunk.Content, StringComparison.Ordinal);
+        Assert.Equal("page 5", chunk.SourceLocation);
+    }
+
+    [Fact]
+    public void ChunkGeneratedReportPages_PrefixesEveryOversizedPiece()
+    {
+        var body = string.Join('\n', Enumerable.Range(1, 80).Select(index => $"Row {index} printed count {index} and salary details for this table row"));
+        var chunks = KnowledgeTextChunker.ChunkGeneratedReportPages(
+            [new PdfExtractedPage(2, body)],
+            "10701",
+            2025);
+
+        Assert.True(chunks.Count >= 2);
+        Assert.All(chunks, chunk =>
+        {
+            Assert.StartsWith("[School 10701, Class of 2025], page 2", chunk.Content, StringComparison.Ordinal);
+            Assert.StartsWith("page 2", chunk.SourceLocation, StringComparison.Ordinal);
+        });
+    }
 }

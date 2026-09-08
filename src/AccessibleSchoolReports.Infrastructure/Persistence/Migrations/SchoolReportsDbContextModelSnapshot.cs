@@ -23,6 +23,9 @@ namespace AccessibleSchoolReports.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("ClassYear")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Duration")
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
@@ -99,6 +102,8 @@ namespace AccessibleSchoolReports.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ClassYear");
+
                     b.HasIndex("ImportRunId");
 
                     b.HasIndex("SchoolId");
@@ -164,6 +169,10 @@ namespace AccessibleSchoolReports.Infrastructure.Persistence.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RowSetSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset>("StartedUtc")
                         .HasColumnType("TEXT");
 
@@ -175,6 +184,8 @@ namespace AccessibleSchoolReports.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ContentSha256");
+
+                    b.HasIndex("RowSetSha256");
 
                     b.HasIndex("StartedUtc");
 

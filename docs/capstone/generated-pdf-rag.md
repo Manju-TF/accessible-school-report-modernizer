@@ -6,6 +6,8 @@ This document describes how a successfully generated school PDF becomes eligible
 
 `ReportGenerationService` writes the PDF to `OutputRoot` and stores `ReportRunItem.OutputPath`. After a **completed** item is saved, it calls `IPdfKnowledgeIngestionService`.
 
+On non-`Testing` startup, `KnowledgeStartup` also backfills completed `ReportRunItem` PDFs that are missing or still using the older chunk format. It does **not** scan files that have no completed run item.
+
 Indexing failure does not delete the PDF and does not fail generation.
 
 ## What is stored
@@ -19,11 +21,12 @@ SQLite stores metadata and extracted **text chunks** only.
 | `SchoolId` / `SchoolCode` | The generated item’s school |
 | `ReportId` | `ReportRunItem.Id` |
 | `ReportRunId` | The parent run, when present |
-| `ReportYear` | Class year (`2025` in this MVP) |
+| `ReportYear` | Class year from the output path (`{year}/{schoolCode}/summary-report.pdf`) |
 | `ReportType` | `Summary` |
 | `SourceIdentifier` | Stored output path (reference only) |
 | `ContentHash` | SHA-256 of the PDF file bytes |
 | `KnowledgeChunk.SourceLocation` | `page N` (and line range when a page is split) |
+| `KnowledgeChunk.Content` | Page text with a `[School {code}, Class of {year}, page N]` prefix so lexical retrieval can match school-wise and year-wise questions |
 
 There is no PDF blob column. Vectors are produced later by `IKnowledgeEmbeddingIndexService` (see `docs/capstone/external-rag-api.md`), only for chunks the caller may send to the configured provider. Report generation does not wait on embeddings.
 

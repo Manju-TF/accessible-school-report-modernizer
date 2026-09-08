@@ -1,15 +1,15 @@
 using AccessibleSchoolReports.Application.Knowledge;
 using AccessibleSchoolReports.Application.Reporting;
 using AccessibleSchoolReports.Infrastructure.Embeddings;
+using AccessibleSchoolReports.Infrastructure.Import;
 using AccessibleSchoolReports.Infrastructure.Knowledge;
 using AccessibleSchoolReports.Infrastructure.LanguageModels;
 using AccessibleSchoolReports.Infrastructure.Persistence;
 using AccessibleSchoolReports.Infrastructure.Security;
-using AccessibleSchoolReports.Web.Components;
+using AccessibleSchoolReports.Web.Api;
 using AccessibleSchoolReports.Web.Downloads;
 using AccessibleSchoolReports.Web.Security;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,10 +48,7 @@ builder.Logging.AddFilter(
     LogLevel.Warning);
 
 builder.Services.AddSchoolReportsIdentity();
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
-builder.Services.Configure<HubOptions>(options =>
-    options.MaximumReceiveMessageSize = 12 * 1024 * 1024);
+builder.Services.AddAntiforgery();
 builder.Services.Configure<FormOptions>(options =>
     options.MultipartBodyLengthLimit = 12 * 1024 * 1024);
 
@@ -61,6 +58,16 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SchoolReportsDbContext>();
     await db.MigrateAsync(app.Lifetime.ApplicationStopping);
+    if (!app.Environment.IsEnvironment("Testing"))
+    {
+        var root = SqliteConnectionString.FindRepositoryRoot(app.Environment.ContentRootPath);
+        await GraduateClassYearBackfill.ApplyFromSampleWorkbooksAsync(
+            db,
+            root,
+            app.Lifetime.ApplicationStopping);
+        await GraduateDuplicateCleanup.ApplyAsync(db, app.Lifetime.ApplicationStopping);
+    }
+
     await IdentityRoleSeed.EnsureRolesAsync(scope.ServiceProvider, app.Lifetime.ApplicationStopping);
     if (app.Environment.IsDevelopment())
     {
@@ -76,7 +83,11 @@ await KnowledgeStartup.PrepareAsync(
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseExceptionHandler(errorApp => errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsync("An error occurred.");
+    }));
     app.UseHsts();
 }
 
@@ -85,16 +96,22 @@ if (!app.Environment.IsEnvironment("Testing"))
     app.UseHttpsRedirection();
 }
 
-// wwwroot only. Generated PDFs live under OutputRoot and are not a static-file directory.
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+app.MapAccountApi();
 app.MapIdentityAuth();
+app.MapMeApi();
+app.MapDashboardApi();
+app.MapImportApi();
+app.MapSchoolsApi();
+app.MapReportsApi();
+app.MapRunsApi();
+app.MapAssistantApi();
 app.MapReportDownloads();
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+app.MapSpaPages();
 
 app.Run();
 

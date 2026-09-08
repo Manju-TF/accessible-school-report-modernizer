@@ -29,7 +29,12 @@ public sealed class KnowledgeGroundedPromptTests
         Assert.Contains("insufficient", system, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Cite source documents", system, StringComparison.Ordinal);
         Assert.Contains("Preserve RuleIds", system, StringComparison.Ordinal);
-        Assert.Contains("Do not perform deterministic report calculations", system, StringComparison.Ordinal);
+        Assert.Contains("Do not recalculate SAS employment, salary, or suppression", system, StringComparison.Ordinal);
+        Assert.Contains("application-computed printed-value arithmetic", system, StringComparison.Ordinal);
+        Assert.Contains("quote printed PDF values only", system, StringComparison.Ordinal);
+        Assert.Contains("quote every matching printed number", system, StringComparison.Ordinal);
+        Assert.Contains("Do not omit a printed figure that is present", system, StringComparison.Ordinal);
+        Assert.Contains("Compare schools or years only using values that appear", system, StringComparison.Ordinal);
         Assert.False(FakeLanguageModelService.ContainsInjection(system));
     }
 

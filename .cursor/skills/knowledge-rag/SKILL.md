@@ -15,7 +15,7 @@ The assistant retrieves authorized text and asks a chat model to summarize it. I
 
 **Index time**
 
-1. Startup (non-`Testing`): `KnowledgeStartup.PrepareAsync` ingests catalog files, then embeds pending chunks.
+1. Startup (non-`Testing`): `KnowledgeStartup.PrepareAsync` ingests catalog files, backfills completed `ReportRunItem` PDFs, then embeds pending chunks.
 2. After a successful PDF generate: `PdfKnowledgeIngestionService` chunks the PDF (`AuthorizationScope = Report`), then embeds pending chunks.
 
 **Ask time**
@@ -42,6 +42,7 @@ Unauthorized `?report=` → “That report is not available.” No school metada
 - Chat: OpenAI-compatible (`LanguageModel:Endpoint`, `LanguageModel:Model`, `LanguageModel:ApiKey`). Groq is just another compatible endpoint.
 - Keys stay in **user secrets**. Never commit them or write them into `appsettings.json`.
 - Retrieval defaults: `TopK = 5`, `MinimumSimilarity = 0.2`, question max 4000 chars.
+- Unscoped questions about printed PDF values or comparisons use `TopK = 15` and diversify across authorized reports so school-wise and year-wise questions can retrieve more than one PDF.
 
 ## Catalog sources
 

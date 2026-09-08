@@ -49,4 +49,10 @@ public sealed class GraduateRecord
     public decimal? SalFtPerm { get; set; }
 
     public string? Emptype1 { get; set; }
+
+    /// <summary>
+    /// Optional class year from the workbook when present.
+    /// Used for generation year choices only. Not a calculator input.
+    /// </summary>
+    public int? ClassYear { get; set; }
 }
