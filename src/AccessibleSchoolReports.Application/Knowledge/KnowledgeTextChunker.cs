@@ -4,6 +4,7 @@ public enum KnowledgeSourceKind
 {
     Sas = 0,
     Markdown = 1,
+    Code = 2,
 }
 
 public sealed record KnowledgeTextChunk(
@@ -17,6 +18,7 @@ public static class KnowledgeTextChunker
 {
     public const int MaxChunkLines = 50;
     public const int MaxChunkCharacters = 2000;
+    public const int PdfOverlapLines = 2;
 
     public static IReadOnlyList<KnowledgeTextChunk> ChunkGeneratedReportPages(
         IReadOnlyList<PdfExtractedPage> pages,
@@ -40,7 +42,7 @@ public static class KnowledgeTextChunker
                 continue;
             }
 
-            foreach (var piece in SplitOversized(lines, (0, lines.Length - 1)))
+            foreach (var piece in SplitPdfPage(lines))
             {
                 var body = Join(lines, piece.Start, piece.End);
                 if (string.IsNullOrWhiteSpace(body))
@@ -120,16 +122,25 @@ public static class KnowledgeTextChunker
     public static IReadOnlyList<KnowledgeTextChunk> Chunk(string text, KnowledgeSourceKind kind)
     {
         var lines = NormalizeLines(text);
-        var ranges = kind == KnowledgeSourceKind.Markdown
-            ? SplitMarkdown(lines)
-            : SplitSas(lines);
+        var ranges = kind switch
+        {
+            KnowledgeSourceKind.Markdown => SplitMarkdown(lines),
+            KnowledgeSourceKind.Code => SplitCode(lines)
+                .Select(range => (range.Start, range.End, ContextStart: range.Start))
+                .ToList(),
+            _ => SplitSas(lines)
+                .Select(range => (range.Start, range.End, ContextStart: range.Start))
+                .ToList(),
+        };
 
         var chunks = new List<KnowledgeTextChunk>();
         foreach (var range in ranges)
         {
-            foreach (var piece in SplitOversized(lines, range))
+            foreach (var piece in SplitOversized(lines, (range.Start, range.End)))
             {
-                var content = Join(lines, piece.Start, piece.End);
+                var content = range.ContextStart < piece.Start
+                    ? $"{Join(lines, range.ContextStart, range.ContextStart)}\n{Join(lines, piece.Start, piece.End)}"
+                    : Join(lines, piece.Start, piece.End);
                 if (string.IsNullOrWhiteSpace(content))
                 {
                     continue;
@@ -155,21 +166,27 @@ public static class KnowledgeTextChunker
             return "rule";
         }
 
-        return kind == KnowledgeSourceKind.Sas ? "sas" : "section";
+        return kind switch
+        {
+            KnowledgeSourceKind.Sas => "sas",
+            KnowledgeSourceKind.Code => "code",
+            _ => "section",
+        };
     }
 
-    private static List<(int Start, int End)> SplitMarkdown(string[] lines)
+    private static List<(int Start, int End, int ContextStart)> SplitMarkdown(string[] lines)
     {
-        var ranges = new List<(int Start, int End)>();
+        var ranges = new List<(int Start, int End, int ContextStart)>();
         var index = 0;
         while (index < lines.Length)
         {
-            if (IsRuleTableHeader(lines[index]))
+            if (IsMarkdownTableHeader(lines, index))
             {
+                var contextStart = index;
                 index = SkipTableHeader(lines, index);
                 while (index < lines.Length && IsTableRow(lines[index]))
                 {
-                    ranges.Add((index, index));
+                    ranges.Add((index, index, contextStart));
                     index++;
                 }
 
@@ -180,12 +197,12 @@ public static class KnowledgeTextChunker
             index++;
             while (index < lines.Length
                 && !IsHeading(lines[index])
-                && !IsRuleTableHeader(lines[index]))
+                && !IsMarkdownTableHeader(lines, index))
             {
                 index++;
             }
 
-            ranges.Add((start, index - 1));
+            ranges.Add((start, index - 1, start));
         }
 
         return ranges;
@@ -207,6 +224,37 @@ public static class KnowledgeTextChunker
             }
 
             ranges.Add((start, index - 1));
+        }
+
+        return ranges;
+    }
+
+    private static List<(int Start, int End)> SplitCode(string[] lines)
+    {
+        var ranges = new List<(int Start, int End)>();
+        var start = 0;
+        while (start < lines.Length)
+        {
+            var end = Math.Min(lines.Length - 1, start + MaxChunkLines - 1);
+            while (end > start && Join(lines, start, end).Length > MaxChunkCharacters)
+            {
+                end--;
+            }
+
+            while (end < lines.Length - 1
+                && end - start + 1 < MaxChunkLines
+                && Join(lines, start, end + 1).Length <= MaxChunkCharacters)
+            {
+                end++;
+            }
+
+            ranges.Add((start, end));
+            if (end == lines.Length - 1)
+            {
+                break;
+            }
+
+            start = Math.Max(start + 1, end - PdfOverlapLines + 1);
         }
 
         return ranges;
@@ -244,6 +292,50 @@ public static class KnowledgeTextChunker
         }
     }
 
+    private static IEnumerable<(int Start, int End)> SplitPdfPage(string[] lines)
+    {
+        var start = 0;
+        while (start < lines.Length)
+        {
+            var end = Math.Min(lines.Length - 1, start + MaxChunkLines - 1);
+            while (end > start && Join(lines, start, end).Length > MaxChunkCharacters)
+            {
+                end--;
+            }
+
+            while (end < lines.Length - 1
+                && end - start + 1 < MaxChunkLines
+                && Join(lines, start, end + 1).Length <= MaxChunkCharacters)
+            {
+                end++;
+            }
+
+            if (end < lines.Length - 1
+                && IsPdfTableRow(lines[end])
+                && IsPdfTableRow(lines[end + 1]))
+            {
+                var tableStart = end;
+                while (tableStart > start && IsPdfTableRow(lines[tableStart - 1]))
+                {
+                    tableStart--;
+                }
+
+                if (tableStart > start)
+                {
+                    end = tableStart - 1;
+                }
+            }
+
+            yield return (start, end);
+            if (end == lines.Length - 1)
+            {
+                yield break;
+            }
+
+            start = Math.Max(start + 1, end - PdfOverlapLines + 1);
+        }
+    }
+
     private static int SkipTableHeader(string[] lines, int headerIndex)
     {
         var index = headerIndex + 1;
@@ -253,6 +345,22 @@ public static class KnowledgeTextChunker
         }
 
         return index;
+    }
+
+    private static bool IsMarkdownTableHeader(string[] lines, int index) =>
+        IsTableRow(lines[index])
+        && index + 1 < lines.Length
+        && IsTableSeparator(lines[index + 1]);
+
+    private static bool IsPdfTableRow(string line)
+    {
+        if (line.Contains('|'))
+        {
+            return true;
+        }
+
+        var tokens = line.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return tokens.Length >= 4 && tokens.Count(token => token.Any(char.IsDigit)) >= 2;
     }
 
     private static bool IsHeading(string line)
@@ -268,10 +376,6 @@ public static class KnowledgeTextChunker
             && trimmed.Length > hashes
             && char.IsWhiteSpace(trimmed[hashes]);
     }
-
-    private static bool IsRuleTableHeader(string line) =>
-        IsTableRow(line)
-        && line.Contains("Rule ID", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsTableSeparator(string line)
     {

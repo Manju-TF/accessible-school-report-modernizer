@@ -395,7 +395,7 @@ public sealed class RagEvaluationTests
         builder.AppendLine("| Retrieval / authz | Production `KnowledgeRetrievalService` + `KnowledgeAccess` + `IReportAuthorizationService` |");
         builder.AppendLine("| Assistant | Production `KnowledgeAssistantService` + `KnowledgeGroundedPrompt` |");
         builder.AppendLine("| Language model | `FakeLanguageModelService` records the exact request. Completion text is a stub, not a live answer. |");
-        builder.AppendLine("| Scoring | Top-K = 5 (15 for unscoped printed-report / comparison questions), minimum similarity = 0.2 |");
+        builder.AppendLine($"| Scoring | Top-K = {KnowledgeRetrievalOptions.DefaultTopK} ({KnowledgeRetrievalOptions.DefaultGlobalTopK} for unscoped printed-report / comparison questions), minimum score = {KnowledgeRetrievalOptions.DefaultMinimumSimilarity}; cosine similarity plus exact-term overlap |");
         builder.AppendLine("| Pass rule | An expected source or RuleId appears **somewhere in top-K**, not only as rank 1. Security cases also require School B text absent from hits and from the formatted LLM user message. |");
         builder.AppendLine();
         builder.AppendLine("School B chunks were embedded **before** the School A user asked questions, so a leak would have been possible if authorization failed.");

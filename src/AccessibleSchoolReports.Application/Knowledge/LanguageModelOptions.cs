@@ -4,11 +4,11 @@ public sealed class LanguageModelOptions
 {
     public const string SectionName = "LanguageModel";
 
-    public string Provider { get; set; } = "OpenAICompatible";
+    public string Provider { get; set; } = "Gemini";
 
-    public string Endpoint { get; set; } = "https://api.openai.com/v1/chat/completions";
+    public string Endpoint { get; set; } = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions";
 
-    public string Model { get; set; } = "gpt-4o-mini";
+    public string Model { get; set; } = "gemini-3.8-flash";
 
     public int TimeoutSeconds { get; set; } = 60;
 

@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "sqlite": {
+      "type": "stdio",
+      "command": "C:\\Program Files\\nodejs\\node.exe",
+      "args": [
+        "--experimental-sqlite",
+        "${workspaceFolder}\\scripts\\mcp-sqlite-readonly.mjs",
+        "${workspaceFolder}\\data\\schoolreports.db"
+      ]
+    }
+  }
+}

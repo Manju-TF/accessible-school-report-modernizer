@@ -7,6 +7,8 @@ namespace AccessibleSchoolReports.Domain.Entities;
 /// </summary>
 public sealed class KnowledgeDocument
 {
+    public const int CurrentChunkFormatVersion = 2;
+
     public int Id { get; set; }
 
     public required string FileName { get; set; }
@@ -41,6 +43,8 @@ public sealed class KnowledgeDocument
     public string? ReportType { get; set; }
 
     public KnowledgeAuthorizationScope AuthorizationScope { get; set; }
+
+    public int ChunkFormatVersion { get; set; } = CurrentChunkFormatVersion;
 
     public DateTimeOffset CreatedAt { get; set; }
 

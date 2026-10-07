@@ -73,7 +73,7 @@ The request may include a decorative file name. That value is ignored. Stored pa
 
 `KnowledgeAccess.WhereAccessible` applies that filter **before** similarity ranking or any LLM call. `IKnowledgeAssistantService` retrieves authorized top-K hits, builds a grounded prompt that treats retrieved text as untrusted data, then calls `ILanguageModelService`. `IEmbeddingService` uses the same rule (`EmbeddingAccess`) before any chunk text is sent to an external embedding provider.
 
-Legacy SAS and listed project markdown files are indexed by `IKnowledgeIngestionService`. Generated school PDFs are indexed by `IPdfKnowledgeIngestionService` with `AuthorizationScope=Report`. See `docs/capstone/generated-pdf-rag.md`. Ingestion is read-only, SHA-256 incremental, and does not store embeddings or graduate records.
+Legacy SAS, project Markdown under `docs/`, the root README, and C# sources under the Application and Domain projects are indexed by `IKnowledgeIngestionService`. Generated school PDFs are indexed by `IPdfKnowledgeIngestionService` with `AuthorizationScope=Report`. See `docs/capstone/generated-pdf-rag.md`. Source ingestion is read-only and SHA-256 incremental; generated PDFs are stored as extracted text chunks, not PDF bytes or graduate records.
 
 ## Where it is enforced
 

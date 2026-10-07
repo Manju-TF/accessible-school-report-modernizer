@@ -44,6 +44,9 @@ builder.Logging.AddFilter(
     "System.Net.Http.HttpClient.OpenAiCompatibleEmbeddingService",
     LogLevel.Warning);
 builder.Logging.AddFilter(
+    "System.Net.Http.HttpClient.GeminiEmbeddingService",
+    LogLevel.Warning);
+builder.Logging.AddFilter(
     "System.Net.Http.HttpClient.OpenAiCompatibleLanguageModelService",
     LogLevel.Warning);
 

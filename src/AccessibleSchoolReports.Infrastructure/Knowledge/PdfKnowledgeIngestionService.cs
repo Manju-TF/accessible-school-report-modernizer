@@ -123,6 +123,7 @@ public sealed class PdfKnowledgeIngestionService : IPdfKnowledgeIngestionService
                 ReportYear = reportYear,
                 ReportType = reportType,
                 AuthorizationScope = KnowledgeAuthorizationScope.Report,
+                ChunkFormatVersion = KnowledgeDocument.CurrentChunkFormatVersion,
                 CreatedAt = now,
             };
             AddChunks(document, chunks, now);
@@ -145,6 +146,7 @@ public sealed class PdfKnowledgeIngestionService : IPdfKnowledgeIngestionService
         existing.ReportYear = reportYear;
         existing.ReportType = reportType;
         existing.AuthorizationScope = KnowledgeAuthorizationScope.Report;
+        existing.ChunkFormatVersion = KnowledgeDocument.CurrentChunkFormatVersion;
         AddChunks(existing, chunks, now);
         await db.SaveChangesAsync(cancellationToken);
         return PdfKnowledgeIngestionResult.From(PdfKnowledgeIngestionStatus.Reindexed, existing.Id);
@@ -214,7 +216,8 @@ public sealed class PdfKnowledgeIngestionService : IPdfKnowledgeIngestionService
     }
 
     internal static bool HasCurrentReportChunkFormat(KnowledgeDocument document) =>
-        document.Chunks.Count > 0
+        document.ChunkFormatVersion == KnowledgeDocument.CurrentChunkFormatVersion
+        && document.Chunks.Count > 0
         && document.Chunks.All(chunk =>
             chunk.Content.StartsWith("[School ", StringComparison.Ordinal));
 

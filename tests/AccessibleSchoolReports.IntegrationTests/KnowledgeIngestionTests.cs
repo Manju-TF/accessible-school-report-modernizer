@@ -39,7 +39,11 @@ public sealed class KnowledgeIngestionTests
         Assert.Contains("docs/capstone/schreptsummary-analysis.md", result.Indexed);
         Assert.Contains("docs/capstone/report-map.md", result.Indexed);
         Assert.Contains("docs/accessibility/pdf-accessibility-strategy.md", result.Indexed);
+        Assert.Contains("docs/accessibility/ui-accessibility-review.md", result.Indexed);
         Assert.Contains("docs/architecture/corrected-plan.md", result.Indexed);
+        Assert.Contains("docs/decisions/rejected-ai-proposals.md", result.Indexed);
+        Assert.Contains("docs/capstone-demo/README.md", result.Indexed);
+        Assert.Contains("src/AccessibleSchoolReports.Application/Reporting/SchoolReportCalculator.cs", result.Indexed);
         Assert.Contains("README.md", result.Indexed);
         Assert.Empty(result.Reindexed);
         Assert.DoesNotContain(result.Indexed, path => path.StartsWith("data/", StringComparison.OrdinalIgnoreCase));

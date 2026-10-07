@@ -165,19 +165,14 @@ public sealed class PdfKnowledgeIngestionServiceTests
     }
 
     [Fact]
-    public async Task UnchangedHash_ReindexesOldChunkFormat()
+    public async Task UnchangedHash_ReindexesOldChunkFormatVersion()
     {
         await using var fixture = await Fixture.CreateAsync();
         var first = await fixture.IngestAsync();
         Assert.Equal(PdfKnowledgeIngestionStatus.Indexed, first.Status);
 
         var document = await fixture.Db.KnowledgeDocuments.Include(row => row.Chunks).SingleAsync();
-        foreach (var chunk in document.Chunks)
-        {
-            var newline = chunk.Content.IndexOf('\n');
-            chunk.Content = newline >= 0 ? chunk.Content[(newline + 1)..] : "Total Reported without school prefix";
-        }
-
+        document.ChunkFormatVersion = 0;
         await fixture.Db.SaveChangesAsync();
         fixture.Db.ChangeTracker.Clear();
 
