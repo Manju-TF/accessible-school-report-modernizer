@@ -40,7 +40,9 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
                     document => document.SourceIdentifier == source.RelativePath,
                     cancellationToken);
 
-            if (existing is not null && existing.ContentHash == hash)
+            if (existing is not null
+                && existing.ContentHash == hash
+                && existing.ChunkFormatVersion == KnowledgeDocument.CurrentChunkFormatVersion)
             {
                 skipped.Add(source.RelativePath);
                 continue;
@@ -86,6 +88,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             SourceIdentifier = source.RelativePath,
             IndexedAt = now,
             AuthorizationScope = KnowledgeAuthorizationScope.Authenticated,
+            ChunkFormatVersion = KnowledgeDocument.CurrentChunkFormatVersion,
             CreatedAt = now,
         };
         AddChunks(document, chunks, now);
@@ -105,6 +108,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
         existing.ContentHash = hash;
         existing.IndexedAt = now;
         existing.AuthorizationScope = KnowledgeAuthorizationScope.Authenticated;
+        existing.ChunkFormatVersion = KnowledgeDocument.CurrentChunkFormatVersion;
         existing.SchoolId = null;
         existing.ReportId = null;
         existing.ReportYear = null;
@@ -163,6 +167,25 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             }
         }
 
+        foreach (var relativeProjectFile in KnowledgeSourceCatalog.DiscoverProjectMarkdownFiles(root))
+        {
+            var fullPath = Path.GetFullPath(Path.Combine(root, relativeProjectFile.Replace('/', Path.DirectorySeparatorChar)));
+            if (File.Exists(fullPath))
+            {
+                TryAdd(fullPath, KnowledgeDocumentType.Project, KnowledgeSourceKind.Markdown);
+            }
+            else
+            {
+                missing.Add(relativeProjectFile);
+            }
+        }
+
+        foreach (var relativeCodeFile in KnowledgeSourceCatalog.DiscoverBusinessRuleCodeFiles(root))
+        {
+            var fullPath = Path.GetFullPath(Path.Combine(root, relativeCodeFile.Replace('/', Path.DirectorySeparatorChar)));
+            TryAdd(fullPath, KnowledgeDocumentType.Project, KnowledgeSourceKind.Code);
+        }
+
         foreach (var project in KnowledgeSourceCatalog.ProjectDocuments)
         {
             var preferred = CombineUnderRoot(root, project.RelativePath);
@@ -184,7 +207,7 @@ public sealed class KnowledgeIngestionService : IKnowledgeIngestionService
             missing.Add(KnowledgeSourceCatalog.Normalize(project.RelativePath));
         }
 
-        return new ResolvedBatch(sources, missing);
+        return new ResolvedBatch(sources, missing.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList());
 
         void TryAdd(string fullPath, KnowledgeDocumentType documentType, KnowledgeSourceKind kind)
         {

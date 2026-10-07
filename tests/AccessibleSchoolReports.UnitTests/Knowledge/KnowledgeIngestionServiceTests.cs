@@ -19,6 +19,7 @@ public sealed class KnowledgeIngestionServiceTests
 
         Assert.Contains("legacy/sas/sample.sas", result.Indexed);
         Assert.Contains("docs/capstone/business-rules.md", result.Indexed);
+        Assert.Contains("src/AccessibleSchoolReports.Application/Reporting/SampleRules.cs", result.Indexed);
         Assert.Contains("README.md", result.Indexed);
         Assert.Empty(result.SkippedUnchanged);
         Assert.DoesNotContain(result.Indexed, path => path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase));
@@ -29,6 +30,9 @@ public sealed class KnowledgeIngestionServiceTests
 
         Assert.Equal(KnowledgeDocumentType.Legacy, sas.DocumentType);
         Assert.Equal(KnowledgeDocumentType.Project, rules.DocumentType);
+        var code = documents.Single(row =>
+            row.SourceIdentifier == "src/AccessibleSchoolReports.Application/Reporting/SampleRules.cs");
+        Assert.Contains(code.Chunks, chunk => chunk.Content.Contains("CF-C-05", StringComparison.Ordinal));
         Assert.All(documents, document =>
         {
             Assert.Equal(KnowledgeAuthorizationScope.Authenticated, document.AuthorizationScope);
@@ -57,6 +61,23 @@ public sealed class KnowledgeIngestionServiceTests
         Assert.Empty(second.Reindexed);
         Assert.Equal(first.Indexed, second.SkippedUnchanged);
         Assert.Equal(first.Indexed.Count, await fixture.Db.KnowledgeDocuments.CountAsync());
+    }
+
+    [Fact]
+    public async Task Ingest_ReindexesUnchangedFilesWithOldChunkFormatVersion()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await fixture.IngestAsync();
+        var readme = await fixture.Db.KnowledgeDocuments.SingleAsync(row => row.SourceIdentifier == "README.md");
+        readme.ChunkFormatVersion = 0;
+        await fixture.Db.SaveChangesAsync();
+        fixture.Db.ChangeTracker.Clear();
+
+        var result = await fixture.IngestAsync();
+
+        Assert.Contains("README.md", result.Reindexed);
+        var updated = await fixture.Db.KnowledgeDocuments.SingleAsync(row => row.SourceIdentifier == "README.md");
+        Assert.Equal(KnowledgeDocument.CurrentChunkFormatVersion, updated.ChunkFormatVersion);
     }
 
     [Fact]
@@ -123,6 +144,10 @@ public sealed class KnowledgeIngestionServiceTests
         Assert.DoesNotContain("data/graduates.xlsx", result.Indexed);
         Assert.False(KnowledgeSourceCatalog.IsAllowedRelativePath("data/graduates.xlsx"));
         Assert.False(KnowledgeSourceCatalog.IsAllowedRelativePath("../legacy/sas/secret.sas"));
+        Assert.True(KnowledgeSourceCatalog.IsAllowedRelativePath(
+            "src/AccessibleSchoolReports.Application/Reporting/SchoolReportCalculator.cs"));
+        Assert.False(KnowledgeSourceCatalog.IsAllowedRelativePath(
+            "tests/AccessibleSchoolReports.UnitTests/GeneratedSource.cs"));
     }
 
     [Fact]
@@ -178,6 +203,7 @@ public sealed class KnowledgeIngestionServiceTests
             Directory.CreateDirectory(Path.Combine(root, "legacy", "sas"));
             Directory.CreateDirectory(Path.Combine(root, "docs", "capstone"));
             Directory.CreateDirectory(Path.Combine(root, "data"));
+            Directory.CreateDirectory(Path.Combine(root, "src", "AccessibleSchoolReports.Application", "Reporting"));
             File.WriteAllText(Path.Combine(root, "AccessibleSchoolReports.sln"), string.Empty);
             File.WriteAllText(
                 Path.Combine(root, "legacy", "sas", "sample.sas"),
@@ -192,6 +218,9 @@ public sealed class KnowledgeIngestionServiceTests
                 | CF-S-00 | n ge 5 |
                 """);
             File.WriteAllText(Path.Combine(root, "README.md"), "# Sample\n\nCapstone notes.\n");
+            File.WriteAllText(
+                Path.Combine(root, "src", "AccessibleSchoolReports.Application", "Reporting", "SampleRules.cs"),
+                "public sealed class SampleRules\n{\n    // CF-C-05\n    public const string EmploymentRule = \"jobcat1\";\n}\n");
             File.WriteAllBytes(Path.Combine(root, "data", "graduates.xlsx"), "not-a-real-workbook"u8.ToArray());
 
             var connectionString = new SqliteConnectionStringBuilder

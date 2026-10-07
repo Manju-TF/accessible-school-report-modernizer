@@ -41,15 +41,16 @@ This repository is an **AI-assisted modernization**. Cursor agents generated pla
 27. [Git workflow](#git-workflow)
 28. [Human review](#human-review--reviewed-not-abdicated)
 29. [Setup and local run](#setup-and-local-run)
-30. [Configuration](#configuration)
-31. [Demo walkthrough](#demo--capstone-walkthrough)
-32. [Traceability matrix](#traceability-matrix)
-33. [Definition of done](#capstone-definition-of-done)
-34. [Performance](#performance)
-35. [Security considerations](#security-considerations)
-36. [Limitations, assumptions, and risks](#limitations-assumptions-and-risks)
-37. [Future enhancements](#future-enhancements)
-38. [Documentation index](#documentation-index)
+30. [Hosting a demo URL](#hosting-a-demo-url)
+31. [Configuration](#configuration)
+32. [Demo walkthrough](#demo--capstone-walkthrough)
+33. [Traceability matrix](#traceability-matrix)
+34. [Definition of done](#capstone-definition-of-done)
+35. [Performance](#performance)
+36. [Security considerations](#security-considerations)
+37. [Limitations, assumptions, and risks](#limitations-assumptions-and-risks)
+38. [Future enhancements](#future-enhancements)
+39. [Documentation index](#documentation-index)
 
 ---
 
@@ -76,13 +77,13 @@ Blazor Server UI + authorized download
 Knowledge Assistant (supporting feature, not the calculator):
 
 ```text
-Legacy SAS / project docs / generated reports
+Legacy SAS / Markdown / Application + Domain code / generated reports
                 ↓
         Document ingestion
                 ↓
              Chunking
                 ↓
-     Lexical embeddings (default)
+     OpenAI-compatible semantic embeddings (default)
                 ↓
         Authorization-aware retrieval
                 ↓
@@ -198,7 +199,7 @@ The PDF layer does not recompute business statistics. Presentation tests use a h
 - ClosedXML (`ExcelGraduateImportService`, `ExcelGraduateWorkbookParser`)
 - QuestPDF (`QuestPdfAccessiblePdfGenerator`)
 - Report orchestration (`ReportGenerationService`)
-- Knowledge ingest, retrieval, assistant, lexical/OpenAI embeddings, OpenAI-compatible chat
+- Knowledge ingest, retrieval, assistant, Gemini/lexical/OpenAI-compatible embeddings, Gemini-compatible chat
 - Identity seed helpers and `ReportAuthorizationService`
 
 ### Web (`src/AccessibleSchoolReports.Web`)
@@ -568,7 +569,7 @@ Implemented controls:
 - API keys stay in user secrets / environment; empty in committed `appsettings.json`
 - Prompt injection in SAS/markdown/PDF is treated as untrusted data (`KnowledgeGroundedPromptTests`)
 - Empty retrieval shows **Insufficient evidence** (the UI does not present an ungrounded answer)
-- Observed 11-case evaluation (lexical embeddings, fake LLM, School B leak check): [`evidence/test-results/rag-evaluation.md`](evidence/test-results/rag-evaluation.md)
+- Observed 12-case evaluation (local lexical embeddings, fake LLM, School B leak check): [`evidence/test-results/rag-evaluation.md`](evidence/test-results/rag-evaluation.md)
 
 ---
 
@@ -846,6 +847,50 @@ exit $?
 
 ---
 
+## Hosting a demo URL
+
+The MVP is a **single .NET 8 process + SQLite file + PDF folder**. That is a machine, not a static site. There is no Dockerfile. Do not add a second database to fit a host.
+
+### What not to use
+
+| Host | Why it does not fit |
+|---|---|
+| GitHub Pages, Netlify, Vercel | Static HTML only — no APIs, SQLite, or PDF downloads |
+| Render or Railway (no Docker) | No native .NET runtime; they expect a Dockerfile |
+| DigitalOcean App Platform | Native .NET buildpack, but **no persistent disk** — SQLite and PDFs vanish on every deploy |
+| Azure App Service | Native .NET, but the network disk often **locks** SQLite |
+
+### Share the local app (simplest)
+
+For a capstone session, keep running `https://localhost:7117` and publish a temporary URL with [Dev Tunnels](https://learn.microsoft.com/en-us/azure/developer/dev-tunnels/get-started) or Cloudflare Tunnel. Point the tunnel at port **7117**. The laptop must stay awake. SQLite, generated PDFs, and `/legacy` stay on this machine.
+
+### Always-on without Docker
+
+Use one small Linux or Windows **VM** (DigitalOcean Droplet, Azure VM, or Lightsail). Install the .NET 8 SDK and Node.js (publish builds the React SPA), clone this repo, and publish the web project to a folder:
+
+```bash
+dotnet publish src/AccessibleSchoolReports.Web/AccessibleSchoolReports.Web.csproj -c Release -o /var/www/meridian
+```
+
+Put the database and PDFs on **local disk** (for example `/var/data`), not on a PaaS ephemeral filesystem. Set environment variables (never commit real values):
+
+| Variable | Value |
+|---|---|
+| `ASPNETCORE_ENVIRONMENT` | `Development` (Identity seed runs only in Development) |
+| `ASPNETCORE_URLS` | `http://0.0.0.0:80` |
+| `ConnectionStrings__SchoolReports` | `Data Source=/var/data/schoolreports.db` |
+| `ReportGeneration__OutputRoot` | `/var/data/output` |
+| `Identity__SeedUserName` / `SeedPassword` / `SeedRole` | Demo Admin (`SeedRole=Admin`) |
+| `Embeddings__Provider` | `Gemini` |
+| `Embeddings__ApiKey` | Gemini API key for semantic embeddings |
+| `LanguageModel__Endpoint` / `Model` / `ApiKey` | Gemini Chat Completions endpoint, `gemini-3.8-flash`, and Gemini API key |
+
+Run `AccessibleSchoolReports.Web.dll` with systemd (Linux) or as a Windows service. `/legacy` is not on GitHub — import, generate, and dashboard still work; SAS catalog files are missing unless you copy them onto the VM.
+
+Do not generate all 189 schools on a first host. Do not enable more than one instance against the same SQLite file.
+
+---
+
 ## Configuration
 
 | Key | Role |
@@ -855,10 +900,11 @@ exit $?
 | `ReportGeneration:OutputRoot` | PDF root (`output` under the Web content root) |
 | `ReportGeneration:ClassYear` | Default `2025` |
 | `ReportGeneration:DefaultMaxParallelism` | Default `4` |
-| `Embeddings:Provider` | `Lexical` (default) or `OpenAICompatible` |
-| `Embeddings:ApiKey` | Required only for remote embeddings |
-| `LanguageModel:ApiKey` | Required for live chat completions |
-| `LanguageModel:Endpoint` / `Model` | Default OpenAI-compatible chat |
+| `Embeddings:Provider` | `Gemini` (default), `OpenAICompatible`, or `Lexical` for local hashed vectors |
+| `Embeddings:Model` | `gemini-embedding-001` by default |
+| `Embeddings:ApiKey` | Gemini API key for remote embeddings |
+| `LanguageModel:ApiKey` | Gemini API key for live chat completions |
+| `LanguageModel:Endpoint` / `Model` | Google's OpenAI-compatible endpoint / `gemini-3.8-flash` |
 
 Placeholders (user secrets or environment; never commit real values):
 
@@ -985,7 +1031,7 @@ If a timed run is needed, generate all schools in the UI and copy the duration f
 
 - PDF accessibility is **not** validated with veraPDF, PAC, or a screen reader
 - UI accessibility is reviewed, not certified
-- Local MVP: no multi-node host, no second database, no cloud deploy
+- Local MVP: no multi-node host, no second database. A public URL is a tunnel to this machine or one VM with local SQLite — not a container PaaS
 - SQLite writers can lock under concurrent load
 - Eighteen characterization tests remain skipped
 - Baseline PDF and sample Excel are different populations
@@ -999,7 +1045,7 @@ If a timed run is needed, generate all schools in the UI and copy the duration f
 - Input workbooks follow the characterized column set
 - Report year `2025` is the MVP chrome year
 - School codes are the SAS `%SCHRPTS` identifiers
-- External AI APIs are optional at deploy time (lexical embeddings still retrieve)
+- The assistant requires configured embedding and chat providers; `Lexical` embeddings are available for local-only retrieval
 - Development seed users exist only when secrets are set
 
 ### Risks

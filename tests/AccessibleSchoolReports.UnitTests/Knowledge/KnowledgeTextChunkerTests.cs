@@ -40,8 +40,10 @@ public sealed class KnowledgeTextChunkerTests
         Assert.Equal("CF-S-00", chunks[0].RuleId);
         Assert.Equal("rule", chunks[0].Category);
         Assert.Equal("lines 3-3", chunks[0].SourceLocation);
+        Assert.Contains("| Rule ID | Notes |", chunks[0].Content, StringComparison.Ordinal);
         Assert.Contains("n ge 5", chunks[0].Content, StringComparison.Ordinal);
         Assert.Equal("SS-HDR-01", chunks[1].RuleId);
+        Assert.Contains("| Rule ID | Notes |", chunks[1].Content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -133,6 +135,8 @@ public sealed class KnowledgeTextChunkerTests
             2025);
 
         Assert.True(chunks.Count >= 2);
+        Assert.Contains("Row 49", chunks[1].Content, StringComparison.Ordinal);
+        Assert.Contains("Row 50", chunks[1].Content, StringComparison.Ordinal);
         Assert.All(chunks, chunk =>
         {
             Assert.StartsWith("[School 10701, Class of 2025], page 2", chunk.Content, StringComparison.Ordinal);

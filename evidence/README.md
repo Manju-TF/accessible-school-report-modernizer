@@ -20,7 +20,7 @@ evidence/
 | `test-results/final-quality-report.md` | Solution build/test snapshot (4 Sep 2026). One known fail: `LegacyModernParityTests`. |
 | `test-results/parity-results.md` | Metric-by-metric baseline PDF vs sample-school calculator. **FAIL** (different populations). |
 | `test-results/security-test-results.md` | 32-case application security suite runner output. |
-| `test-results/rag-evaluation.md` | 11-case RAG retrieval evaluation (lexical embeddings; School B leak check). |
+| `test-results/rag-evaluation.md` | 12-case RAG retrieval evaluation (local lexical embeddings; School B leak check). |
 | `test-results/security-ui-review.md` | Playwright MCP UI security/accessibility review. Findings are not claimed fixed. |
 | `screenshots/pdf-compare/` | Baseline / fixture / generated page images plus `fixture-layout.pdf`. Visual compare only — not PDF/UA validation. |
 

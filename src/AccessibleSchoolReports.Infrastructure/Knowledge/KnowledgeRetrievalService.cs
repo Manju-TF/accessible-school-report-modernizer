@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.RegularExpressions;
 using AccessibleSchoolReports.Application.Knowledge;
 using AccessibleSchoolReports.Application.Security;
 using AccessibleSchoolReports.Domain.Entities;
@@ -11,6 +12,13 @@ namespace AccessibleSchoolReports.Infrastructure.Knowledge;
 public sealed class KnowledgeRetrievalService : IKnowledgeRetrievalService
 {
     private const int MaxTopK = 50;
+    private const float LexicalOverlapWeight = 0.2f;
+    private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a", "an", "and", "are", "as", "at", "be", "but", "by", "does", "for",
+        "from", "how", "in", "is", "it", "of", "on", "or", "that", "the", "this",
+        "to", "was", "when", "where", "which", "with",
+    };
 
     private readonly IDbContextFactory<SchoolReportsDbContext> _dbFactory;
     private readonly IEmbeddingService _embeddings;
@@ -95,13 +103,14 @@ public sealed class KnowledgeRetrievalService : IKnowledgeRetrievalService
         }
 
         var query = await _embeddings.EmbedQueryAsync(question, cancellationToken);
+        var queryTerms = ExtractTerms(question);
         var reportScoped = settings.ReportId is int;
         var prefersPrintedReports = KnowledgeQuestionIntent.PrefersPrintedReportEvidence(question);
         var minimumSimilarity = reportScoped && prefersPrintedReports
             ? 0f
             : settings.MinimumSimilarity;
         var ranked = candidates
-            .Select(chunk => Score(chunk, query.Values))
+            .Select(chunk => Score(chunk, query.Values, queryTerms))
             .Where(hit => hit.Similarity >= minimumSimilarity)
             .OrderByDescending(hit => !reportScoped && prefersPrintedReports && hit.DocumentType == KnowledgeDocumentType.GeneratedReport)
             .ThenByDescending(hit => hit.Similarity)
@@ -126,7 +135,7 @@ public sealed class KnowledgeRetrievalService : IKnowledgeRetrievalService
         var printedMetricHits = KnowledgeQuestionIntent.AsksForPrintedArithmetic(question)
             ? candidates
                 .Where(chunk => chunk.KnowledgeDocument.DocumentType == KnowledgeDocumentType.GeneratedReport)
-                .Select(chunk => Score(chunk, query.Values))
+                .Select(chunk => Score(chunk, query.Values, queryTerms))
                 .ToList()
             : [];
 
@@ -239,12 +248,20 @@ public sealed class KnowledgeRetrievalService : IKnowledgeRetrievalService
             .ToList();
     }
 
-    private static KnowledgeRetrievalHit Score(KnowledgeChunk chunk, float[] query)
+    private static KnowledgeRetrievalHit Score(
+        KnowledgeChunk chunk,
+        float[] query,
+        IReadOnlySet<string> queryTerms)
     {
         var document = chunk.KnowledgeDocument;
         var values = chunk.Embedding is { Length: > 0 }
             ? EmbeddingVectorConvert.ToFloats(chunk.Embedding)
             : [];
+        var cosine = EmbeddingSimilarity.Cosine(query, values);
+        var contentTerms = ExtractTerms(chunk.Content);
+        var overlap = queryTerms.Count == 0
+            ? 0f
+            : (float)queryTerms.Count(contentTerms.Contains) / queryTerms.Count;
         return new KnowledgeRetrievalHit
         {
             ChunkId = chunk.Id,
@@ -260,9 +277,15 @@ public sealed class KnowledgeRetrievalService : IKnowledgeRetrievalService
             FileName = document.FileName,
             DocumentType = document.DocumentType,
             AuthorizationScope = document.AuthorizationScope,
-            Similarity = EmbeddingSimilarity.Cosine(query, values),
+            Similarity = Math.Min(1f, cosine + LexicalOverlapWeight * overlap),
         };
     }
+
+    private static HashSet<string> ExtractTerms(string text) =>
+        Regex.Matches(text, @"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*")
+            .SelectMany(match => match.Value.Split('-'))
+            .Where(term => term.Length >= 2 && !StopWords.Contains(term))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private static bool CanRetrieve(ClaimsPrincipal user)
     {

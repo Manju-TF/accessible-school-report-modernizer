@@ -44,6 +44,13 @@ public static class EmbeddingServiceExtensions
             client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         });
 
+        services.AddHttpClient(nameof(GeminiEmbeddingService), (provider, client) =>
+        {
+            var value = provider.GetRequiredService<IOptions<EmbeddingOptions>>().Value;
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(value.TimeoutSeconds, 1, 120));
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        });
+
         services.AddScoped<IEmbeddingService>(provider =>
         {
             var configured = provider.GetRequiredService<IOptions<EmbeddingOptions>>();
@@ -55,8 +62,19 @@ public static class EmbeddingServiceExtensions
                     configured);
             }
 
-            var client = provider.GetRequiredService<IHttpClientFactory>()
-                .CreateClient(nameof(OpenAiCompatibleEmbeddingService));
+            var clientFactory = provider.GetRequiredService<IHttpClientFactory>();
+            if (configured.Value.UsesGemini)
+            {
+                var geminiClient = clientFactory.CreateClient(nameof(GeminiEmbeddingService));
+                return new GeminiEmbeddingService(
+                    geminiClient,
+                    configured,
+                    provider.GetRequiredService<IDbContextFactory<SchoolReportsDbContext>>(),
+                    provider.GetRequiredService<IReportAuthorizationService>(),
+                    provider.GetRequiredService<ILogger<GeminiEmbeddingService>>());
+            }
+
+            var client = clientFactory.CreateClient(nameof(OpenAiCompatibleEmbeddingService));
             return new OpenAiCompatibleEmbeddingService(
                 client,
                 configured,

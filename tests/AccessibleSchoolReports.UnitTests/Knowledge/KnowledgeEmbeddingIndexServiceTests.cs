@@ -4,6 +4,7 @@ using AccessibleSchoolReports.Infrastructure.Knowledge;
 using AccessibleSchoolReports.Infrastructure.Security;
 using AccessibleSchoolReports.UnitTests.Embeddings;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AccessibleSchoolReports.UnitTests.Knowledge;
 
@@ -24,7 +25,7 @@ public sealed class KnowledgeEmbeddingIndexServiceTests
         Assert.Equal(0, result.Failures);
         Assert.Equal(3, result.DocumentsIndexed);
         Assert.True(result.Duration >= TimeSpan.Zero);
-        Assert.Equal(3, fake.EmbedCalls);
+        Assert.Equal(1, fake.EmbedCalls);
         Assert.False(fake.UsedNetwork);
 
         fixture.Db.ChangeTracker.Clear();
@@ -51,7 +52,7 @@ public sealed class KnowledgeEmbeddingIndexServiceTests
         Assert.Equal(0, second.ChunksIndexed);
         Assert.Equal(3, second.ChunksSkipped);
         Assert.Equal(0, second.DocumentsIndexed);
-        Assert.Equal(3, fake.EmbedCalls);
+        Assert.Equal(1, fake.EmbedCalls);
     }
 
     [Fact]
@@ -68,7 +69,7 @@ public sealed class KnowledgeEmbeddingIndexServiceTests
 
         Assert.Equal(3, result.ChunksIndexed);
         Assert.Equal(0, result.ChunksSkipped);
-        Assert.Equal(6, fake.EmbedCalls);
+        Assert.Equal(2, fake.EmbedCalls);
         fixture.Db.ChangeTracker.Clear();
         Assert.All(
             await fixture.Db.KnowledgeChunks.ToListAsync(),
@@ -107,6 +108,7 @@ public sealed class KnowledgeEmbeddingIndexServiceTests
         Assert.Equal(2, result.ChunksIndexed);
         Assert.Equal(1, result.Failures);
         Assert.Equal(fixture.SchoolAChunkId, Assert.Single(result.FailureDetails).ChunkId);
+        Assert.Equal(4, fake.EmbedCalls);
         fixture.Db.ChangeTracker.Clear();
         var failed = await fixture.Db.KnowledgeChunks.SingleAsync(chunk => chunk.Id == fixture.SchoolAChunkId);
         var legacy = await fixture.Db.KnowledgeChunks.SingleAsync(chunk => chunk.Id == fixture.LegacyChunkId);
@@ -136,5 +138,6 @@ public sealed class KnowledgeEmbeddingIndexServiceTests
         new(
             new EmbeddingTestFixture.Factory(fixture.DbOptions),
             fake,
-            new ReportAuthorizationService(fixture.Db));
+            new ReportAuthorizationService(fixture.Db),
+            Options.Create(fixture.Options));
 }

@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using AccessibleSchoolReports.Application.Knowledge;
 using AccessibleSchoolReports.Application.Security;
+using AccessibleSchoolReports.Domain.Entities;
 using AccessibleSchoolReports.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace AccessibleSchoolReports.Infrastructure.Knowledge;
 
@@ -11,15 +13,18 @@ public sealed class KnowledgeEmbeddingIndexService : IKnowledgeEmbeddingIndexSer
     private readonly IDbContextFactory<SchoolReportsDbContext> _dbFactory;
     private readonly IEmbeddingService _embeddings;
     private readonly IReportAuthorizationService _authorization;
+    private readonly EmbeddingOptions _options;
 
     public KnowledgeEmbeddingIndexService(
         IDbContextFactory<SchoolReportsDbContext> dbFactory,
         IEmbeddingService embeddings,
-        IReportAuthorizationService authorization)
+        IReportAuthorizationService authorization,
+        IOptions<EmbeddingOptions> options)
     {
         _dbFactory = dbFactory;
         _embeddings = embeddings;
         _authorization = authorization;
+        _options = options.Value;
     }
 
     public async Task<KnowledgeIndexResult> IndexPendingEmbeddingsAsync(
@@ -43,6 +48,7 @@ public sealed class KnowledgeEmbeddingIndexService : IKnowledgeEmbeddingIndexSer
         var chunksSkipped = 0;
         var failures = new List<KnowledgeIndexFailure>();
 
+        var pending = new List<KnowledgeChunk>();
         foreach (var chunk in chunks)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -60,34 +66,74 @@ public sealed class KnowledgeEmbeddingIndexService : IKnowledgeEmbeddingIndexSer
                 continue;
             }
 
+            pending.Add(chunk);
+        }
+
+        foreach (var batch in pending.Chunk(Math.Max(1, _options.MaxBatchSize)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var embedded = await _embeddings.EmbedPermittedChunksAsync(
                     user,
-                    [chunk.Id],
+                    batch.Select(chunk => chunk.Id).ToArray(),
                     cancellationToken);
-                if (embedded.Embedded.Any(item => item.ChunkId == chunk.Id))
+                foreach (var chunk in batch)
                 {
-                    chunksIndexed++;
-                    indexedDocuments.Add(chunk.KnowledgeDocumentId);
-                }
-                else
-                {
-                    chunksSkipped++;
+                    if (embedded.Embedded.Any(item => item.ChunkId == chunk.Id))
+                    {
+                        chunksIndexed++;
+                        indexedDocuments.Add(chunk.KnowledgeDocumentId);
+                    }
+                    else
+                    {
+                        chunksSkipped++;
+                    }
                 }
             }
             catch (OperationCanceledException)
             {
                 throw;
             }
-            catch (Exception exception)
+            catch (EmbeddingProviderException exception) when (exception.StatusCode == 429)
             {
-                failures.Add(new KnowledgeIndexFailure
+                throw;
+            }
+            catch (Exception)
+            {
+                foreach (var chunk in batch)
                 {
-                    ChunkId = chunk.Id,
-                    DocumentId = chunk.KnowledgeDocumentId,
-                    Message = Truncate(exception.Message),
-                });
+                    cancellationToken.ThrowIfCancellationRequested();
+                    try
+                    {
+                        var individual = await _embeddings.EmbedPermittedChunksAsync(
+                            user,
+                            [chunk.Id],
+                            cancellationToken);
+                        if (individual.Embedded.Any(item => item.ChunkId == chunk.Id))
+                        {
+                            chunksIndexed++;
+                            indexedDocuments.Add(chunk.KnowledgeDocumentId);
+                        }
+                        else
+                        {
+                            chunksSkipped++;
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception exception)
+                    {
+                        failures.Add(new KnowledgeIndexFailure
+                        {
+                            ChunkId = chunk.Id,
+                            DocumentId = chunk.KnowledgeDocumentId,
+                            Message = Truncate(exception.Message),
+                        });
+                    }
+                }
             }
         }
 

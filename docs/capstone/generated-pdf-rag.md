@@ -26,9 +26,11 @@ SQLite stores metadata and extracted **text chunks** only.
 | `SourceIdentifier` | Stored output path (reference only) |
 | `ContentHash` | SHA-256 of the PDF file bytes |
 | `KnowledgeChunk.SourceLocation` | `page N` (and line range when a page is split) |
-| `KnowledgeChunk.Content` | Page text with a `[School {code}, Class of {year}, page N]` prefix so lexical retrieval can match school-wise and year-wise questions |
+| `KnowledgeChunk.Content` | Extracted page text with a `[School {code}, Class of {year}, page N]` prefix for school/year context during retrieval |
 
 There is no PDF blob column. Vectors are produced later by `IKnowledgeEmbeddingIndexService` (see `docs/capstone/external-rag-api.md`), only for chunks the caller may send to the configured provider. Report generation does not wait on embeddings.
+
+Pages exceeding the chunk limits are split with a two-line overlap. Markdown tables retain their column header in every row chunk, so a retrieved cell remains labeled with the field it belongs to. `ChunkFormatVersion` triggers existing source and PDF chunks to be rebuilt when the chunking format changes.
 
 ## File handling
 

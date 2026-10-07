@@ -181,6 +181,7 @@ public sealed class SchoolReportsDbContext : IdentityDbContext<IdentityUser>
             entity.Property(e => e.SchoolCode).HasMaxLength(32);
             entity.Property(e => e.ReportType).HasMaxLength(64);
             entity.Property(e => e.AuthorizationScope).HasConversion<int>();
+            entity.Property(e => e.ChunkFormatVersion).HasDefaultValue(0);
 
             entity.HasOne(e => e.School)
                 .WithMany(school => school.KnowledgeDocuments)

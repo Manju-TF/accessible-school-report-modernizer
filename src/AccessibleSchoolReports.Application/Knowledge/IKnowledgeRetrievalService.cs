@@ -17,7 +17,7 @@ public interface IKnowledgeRetrievalService
 
 public sealed class KnowledgeRetrievalOptions
 {
-    public const int DefaultTopK = 5;
+    public const int DefaultTopK = 8;
 
     public const int DefaultGlobalTopK = 21;
 

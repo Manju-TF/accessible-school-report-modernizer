@@ -251,6 +251,11 @@ namespace AccessibleSchoolReports.Infrastructure.Persistence.Migrations
                     b.Property<int>("AuthorizationScope")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("ChunkFormatVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
                     b.Property<string>("ContentHash")
                         .IsRequired()
                         .HasMaxLength(64)

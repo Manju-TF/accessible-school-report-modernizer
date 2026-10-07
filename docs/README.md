@@ -57,4 +57,4 @@ Demo defense pack (slides, script, evaluator packet): [`capstone-demo/`](capston
 | `evidence/test-results/` | Quality, parity, security, RAG, UI review output |
 | `evidence/screenshots/pdf-compare/` | Visual page compare |
 
-Knowledge ingestion reads the catalog in `KnowledgeSourceCatalog` (legacy SAS + listed project markdown). It does not ingest `evidence/`.
+Knowledge ingestion reads `legacy/sas/*.sas`, Markdown files under `docs/` and the root `README.md`, and C# files under the Application and Domain projects. It excludes `evidence/`, build output, and non-source directories. Generated PDFs are indexed separately from completed report records.

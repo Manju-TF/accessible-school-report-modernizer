@@ -191,7 +191,11 @@ internal sealed class RagEvaluationFixture : IAsyncDisposable
         var factory = new EmbeddingTestFixture.Factory(dbOptions);
         var authorization = new ReportAuthorizationService(db);
         var embeddings = new LexicalEmbeddingService(factory, authorization, options);
-        var indexer = new KnowledgeEmbeddingIndexService(factory, embeddings, authorization);
+        var indexer = new KnowledgeEmbeddingIndexService(
+            factory,
+            embeddings,
+            authorization,
+            Microsoft.Extensions.Options.Options.Create(options));
         var index = await indexer.IndexPendingEmbeddingsAsync(Principal("admin", AppRoles.Admin));
 
         db.ChangeTracker.Clear();

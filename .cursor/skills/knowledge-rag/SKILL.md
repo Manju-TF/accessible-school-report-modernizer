@@ -38,15 +38,15 @@ Unauthorized `?report=` → “That report is not available.” No school metada
 
 ## Defaults
 
-- Embeddings: **Lexical** `hashed-bow` (`Embeddings:Provider=Lexical`). Local hashed bag-of-words. Do not send the catalog to an external embed API unless the user switches provider.
-- Chat: OpenAI-compatible (`LanguageModel:Endpoint`, `LanguageModel:Model`, `LanguageModel:ApiKey`). Groq is just another compatible endpoint.
+- Embeddings: **Gemini** `gemini-embedding-001` by default through native `batchEmbedContents`. `Lexical` `hashed-bow` is an explicit local-only option; OpenAI-compatible embeddings can also be configured.
+- Chat: Gemini `gemini-3.8-flash` by default through Google's OpenAI-compatible Chat Completions endpoint. Set both key settings to the Gemini API key.
 - Keys stay in **user secrets**. Never commit them or write them into `appsettings.json`.
-- Retrieval defaults: `TopK = 5`, `MinimumSimilarity = 0.2`, question max 4000 chars.
-- Unscoped questions about printed PDF values or comparisons use `TopK = 15` and diversify across authorized reports so school-wise and year-wise questions can retrieve more than one PDF.
+- Retrieval defaults: `TopK = 8`, `MinimumSimilarity = 0.2`, question max 4000 chars. Ranking combines cosine similarity with exact-term overlap.
+- Unscoped questions about printed PDF values or comparisons use `TopK = 21` and diversify across authorized reports so school-wise and year-wise questions can retrieve more than one PDF.
 
 ## Catalog sources
 
-Only paths in `KnowledgeSourceCatalog`: `legacy/sas/*.sas` (if present) and the listed project markdown. Do not ingest Excel, `data/`, or `evidence/`.
+Knowledge ingestion includes `legacy/sas/*.sas` (if present), Markdown under `docs/`, the root README, and C# under the Application and Domain projects. It excludes Excel, `data/`, `evidence/`, and build output.
 
 ## Hard rules
 
