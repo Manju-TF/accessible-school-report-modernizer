@@ -40,7 +40,7 @@ Anonymous callers are challenged to `/signin`. PDF downloads (`/downloads/report
 - Passwords are hashed by ASP.NET Core Identity (`PasswordHasher<IdentityUser>`). The application never stores or compares raw passwords.
 - Committed `appsettings.json` keeps `Identity:SeedUserName` and `Identity:SeedPassword` empty.
 - Source code does not contain user passwords.
-- A development user is created **only** when both seed values are supplied through user secrets or environment variables.
+- A configured seed user is created or has its password reset on startup in any environment. Both `Identity:SeedUserName` and `Identity:SeedPassword` must be set; the role defaults to Admin.
 
 ```powershell
 dotnet user-secrets set Identity:SeedUserName "dev.user" --project src/AccessibleSchoolReports.Web
@@ -90,7 +90,7 @@ Startup always ensures Identity roles `Admin`, `ReportUser`, and `Viewer` exist.
 
 School-level filtering is enforced in `IReportAuthorizationService` and `UserSchoolAccess`. A ReportUser or Viewer sees only assigned schools. Downloads for an unauthorized report return **404**. The Knowledge Assistant applies `KnowledgeAccess` before retrieval or any language-model call. Details: [`authorization-model.md`](authorization-model.md).
 
-Optional development user: `Identity:SeedRole` must be `Admin`, `ReportUser`, or `Viewer`. Empty defaults to Admin. Development-only.
+Optional seeded user: `Identity:SeedRole` must be `Admin`, `ReportUser`, or `Viewer`. Empty defaults to Admin. Clear the seed settings after creating or resetting an account; while configured, the password is reset to that value on each startup.
 
 ## Security assumptions
 

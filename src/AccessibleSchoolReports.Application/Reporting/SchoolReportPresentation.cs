@@ -13,16 +13,9 @@ public static class SchoolReportPresentation
     public const string Publisher = "Meridian Test Client";
     public const string ComparisonPublisher = "Sample Board";
     public const string ClassYearTitle = "Class of 2025 Summary Report";
-    public const string PreparedLine = "Table prepared by Meridian Test Client, July 2026";
-    public const string FooterUrl = "www.example.com/report-info";
-    public const string FooterUrlHref = "https://www.example.com/report-info";
-    public const string FooterLinkName = "Test client report information";
     public const string NotDisplayed = ".";
     public const string NotDisplayedAccessibleName = "Not displayed";
     public const string SalaryGroupCaption = "Full-time Long-term Salaries";
-
-    public const string Disclaimer =
-        "Meridian Test Client Summary Report data may vary slightly from the school-specific data published by the Sample Board because of definitional differences between the two organizations and because Meridian Test Client's quality control process can result in changes which may not be reflected in Sample Board data. For more on this, see www.example.com/report-info.";
 
     public const string NotePage1 =
         "Categories with no graduates reported are not shown. At least five salaries are required for each salary analysis. The non-binary or chose to self-identify category also includes graduates who selected multiple gender identities. Salaries are reported only for full-time, long-term positions. Salaries for graduates in law firm solo practice have been excluded from the analysis.";

@@ -96,6 +96,76 @@ export async function apiPost<T>(path: string, body?: unknown, signal?: AbortSig
   });
 }
 
+export async function apiPostStream<T, TProgress>(
+  path: string,
+  body: unknown,
+  onProgress: (progress: TProgress) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  const headers = new Headers(await tokenHeaders());
+  headers.set("Accept", "application/x-ndjson");
+  const response = await fetch(path, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (response.status === 400 && cachedToken) {
+    cachedToken = null;
+  }
+
+  if (!response.ok) {
+    throw new ApiError(await readError(response), response.status);
+  }
+  if (!response.body) {
+    throw new Error("The server did not provide a generation progress stream.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: T | undefined;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      if (!line.trim()) {
+        continue;
+      }
+
+      const event = JSON.parse(line) as
+        | { type: "progress"; progress: TProgress }
+        | { type: "result"; result: T };
+      if (event.type === "progress") {
+        onProgress(event.progress);
+      } else if (event.type === "result" && event.result !== undefined) {
+        result = event.result;
+      }
+    }
+
+    if (done) {
+      break;
+    }
+  }
+
+  if (buffer.trim()) {
+    const event = JSON.parse(buffer) as { type?: string; result?: T };
+    if (event.type === "result" && event.result !== undefined) {
+      result = event.result;
+    }
+  }
+
+  if (result === undefined) {
+    throw new Error("The generation progress stream ended before the report results were received.");
+  }
+
+  return result;
+}
+
 export async function apiPostForm<T>(path: string, form: FormData): Promise<T> {
   if (!cachedToken) {
     await getAntiforgery();
