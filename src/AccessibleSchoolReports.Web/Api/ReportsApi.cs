@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Threading.Channels;
 using AccessibleSchoolReports.Application.Reporting;
 using AccessibleSchoolReports.Application.Security;
 using AccessibleSchoolReports.Infrastructure.Persistence;
@@ -46,6 +48,9 @@ public static class ReportsApi
         app.MapPost("/api/reports/all", GenerateAllAsync)
             .RequireAuthorization(AppPolicies.RequireAdmin);
 
+        app.MapPost("/api/reports/all/progress", GenerateAllWithProgressAsync)
+            .RequireAuthorization(AppPolicies.RequireAdmin);
+
         app.MapGet("/api/reports/{id:int}", GetReportAsync)
             .RequireAuthorization(AppPolicies.RequireReportAccess);
     }
@@ -74,9 +79,66 @@ public static class ReportsApi
         IReportGenerationService generation,
         CancellationToken cancellationToken)
     {
+        var validationError = ValidateGenerateAllRequest(body);
+        if (validationError is not null)
+        {
+            return validationError;
+        }
+
+        var result = await RunGenerationAsync(body, generation, cancellationToken, progress: null);
+        return Results.Json(ToAllResult(result), ApiConventions.Json);
+    }
+
+    private static async Task<IResult> GenerateAllWithProgressAsync(
+        GenerateAllRequest body,
+        HttpContext http,
+        IReportGenerationService generation,
+        CancellationToken cancellationToken)
+    {
+        var validationError = ValidateGenerateAllRequest(body);
+        if (validationError is not null)
+        {
+            return validationError;
+        }
+
+        http.Response.ContentType = "application/x-ndjson";
+        http.Response.Headers.CacheControl = "no-cache, no-store";
+        http.Response.Headers["X-Content-Type-Options"] = "nosniff";
+
+        var channel = Channel.CreateUnbounded<SchoolGenerationProgress>(
+            new UnboundedChannelOptions { SingleReader = true, SingleWriter = false });
+        var generationTask = RunGenerationAsync(
+            body,
+            generation,
+            cancellationToken,
+            new InlineProgress<SchoolGenerationProgress>(progress => channel.Writer.TryWrite(progress)));
+        _ = generationTask.ContinueWith(
+            _ => channel.Writer.TryComplete(),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+        await foreach (var progress in channel.Reader.ReadAllAsync(cancellationToken))
+        {
+            await WriteStreamMessageAsync(
+                http.Response,
+                new { type = "progress", progress },
+                cancellationToken);
+        }
+
+        var result = await generationTask;
+        await WriteStreamMessageAsync(http.Response, new { type = "result", result = ToAllResult(result) }, cancellationToken);
+        return Results.Empty;
+    }
+
+    private static IResult? ValidateGenerateAllRequest(GenerateAllRequest body)
+    {
         if (!ApiConventions.IsFourDigitYear(body.ClassYear))
         {
-            return Results.Json(new { error = "Report year must be a four-digit year." }, ApiConventions.Json, statusCode: StatusCodes.Status400BadRequest);
+            return Results.Json(
+                new { error = "Report year must be a four-digit year." },
+                ApiConventions.Json,
+                statusCode: StatusCodes.Status400BadRequest);
         }
 
         var parallel = string.Equals(body.Mode, "parallel", StringComparison.OrdinalIgnoreCase);
@@ -90,24 +152,47 @@ public static class ReportsApi
                 statusCode: StatusCodes.Status400BadRequest);
         }
 
-        var result = parallel
-            ? await generation.GenerateAllParallelAsync(body.MaxParallelism, cancellationToken, body.ClassYear.Trim())
-            : await generation.GenerateAllSequentialAsync(cancellationToken, body.ClassYear.Trim());
+        return null;
+    }
 
-        return Results.Json(
-            new
-            {
-                runId = result.ReportRunId,
-                status = UiFormat.Status(result.Status),
-                statusTone = UiFormat.StatusTone(result.Status),
-                total = result.Total,
-                successful = result.Successful,
-                failed = result.Failed,
-                duration = UiFormat.Duration(result.Duration),
-                message = result.Message,
-                items = result.Items.Select(ToSchoolResult),
-            },
-            ApiConventions.Json);
+    private static Task<AllSchoolReportGenerationResult> RunGenerationAsync(
+        GenerateAllRequest body,
+        IReportGenerationService generation,
+        CancellationToken cancellationToken,
+        IProgress<SchoolGenerationProgress>? progress)
+    {
+        return string.Equals(body.Mode, "parallel", StringComparison.OrdinalIgnoreCase)
+            ? generation.GenerateAllParallelAsync(body.MaxParallelism, cancellationToken, body.ClassYear.Trim(), progress)
+            : generation.GenerateAllSequentialAsync(cancellationToken, body.ClassYear.Trim(), progress);
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
+
+    private static object ToAllResult(AllSchoolReportGenerationResult result) =>
+        new
+        {
+            runId = result.ReportRunId,
+            status = UiFormat.Status(result.Status),
+            statusTone = UiFormat.StatusTone(result.Status),
+            total = result.Total,
+            successful = result.Successful,
+            failed = result.Failed,
+            duration = UiFormat.Duration(result.Duration),
+            message = result.Message,
+            items = result.Items.Select(ToSchoolResult),
+        };
+
+    private static async Task WriteStreamMessageAsync(
+        HttpResponse response,
+        object message,
+        CancellationToken cancellationToken)
+    {
+        await JsonSerializer.SerializeAsync(response.Body, message, ApiConventions.Json, cancellationToken);
+        await response.WriteAsync("\n", cancellationToken);
+        await response.Body.FlushAsync(cancellationToken);
     }
 
     private static async Task<IResult> GetReportAsync(

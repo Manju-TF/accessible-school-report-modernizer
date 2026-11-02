@@ -19,7 +19,6 @@ public sealed class QuestPdfAccessiblePdfGenerator : IAccessiblePdfGenerator
     private const float LabelWidth = 126f;
     private const float DurationLabelWidth = 144f;
     private const float MeasureWidth = 54f;
-    private const string FooterUrl = SchoolReportPresentation.FooterUrl + ".";
 
     static QuestPdfAccessiblePdfGenerator()
     {
@@ -122,7 +121,6 @@ public sealed class QuestPdfAccessiblePdfGenerator : IAccessiblePdfGenerator
                 .DefaultTextStyle(text => text.FontSize(9.2f).FontFamily(FontStack).FontColor(TextColor))
                 .Text(NoteText(page.Note));
 
-            column.Item().PaddingTop(14).Element(footer => ComposeNalpFooter(footer, tagged: page.Number == 1));
         });
     }
 
@@ -273,51 +271,6 @@ public sealed class QuestPdfAccessiblePdfGenerator : IAccessiblePdfGenerator
         }
 
         return note.StartsWith("Note:", StringComparison.Ordinal) ? note : $"Note: {note}";
-    }
-
-    private static void ComposeNalpFooter(IContainer container, bool tagged)
-    {
-        var block = tagged ? container : container.SemanticIgnore();
-        block
-            .DefaultTextStyle(text => text.FontSize(10.1f).FontColor(TextColor).FontFamily(FontStack))
-            .Column(column =>
-            {
-                column.Item().AlignCenter().Element(item =>
-                {
-                    if (tagged)
-                    {
-                        item.SemanticParagraph().Text(SchoolReportPresentation.PreparedLine);
-                    }
-                    else
-                    {
-                        item.Text(SchoolReportPresentation.PreparedLine);
-                    }
-                });
-                column.Item().AlignCenter().Element(item =>
-                {
-                    if (tagged)
-                    {
-                        item.SemanticParagraph().Text(SchoolReportPresentation.Disclaimer);
-                    }
-                    else
-                    {
-                        item.Text(SchoolReportPresentation.Disclaimer);
-                    }
-                });
-                column.Item().AlignCenter().Element(item =>
-                {
-                    if (tagged)
-                    {
-                        item.SemanticLink(SchoolReportPresentation.FooterLinkName)
-                            .Hyperlink(SchoolReportPresentation.FooterUrlHref)
-                            .Text(FooterUrl);
-                    }
-                    else
-                    {
-                        item.Text(FooterUrl);
-                    }
-                });
-            });
     }
 
     private static TextStyle TitleStyle(TextStyle text) =>

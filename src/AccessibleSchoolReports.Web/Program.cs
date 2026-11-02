@@ -10,8 +10,18 @@ using AccessibleSchoolReports.Web.Api;
 using AccessibleSchoolReports.Web.Downloads;
 using AccessibleSchoolReports.Web.Security;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Configuration.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+foreach (var source in builder.Configuration.Sources
+    .Where(source => source is JsonConfigurationSource json
+        && json.Path is { } path
+        && path.StartsWith("appsettings.", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(path, "appsettings.json", StringComparison.OrdinalIgnoreCase))
+    .ToList())
+{
+    builder.Configuration.Sources.Remove(source);
+}
 
 var connectionString = builder.Configuration.GetConnectionString("SchoolReports")
     ?? throw new InvalidOperationException("Connection string 'SchoolReports' is not configured.");
@@ -72,10 +82,7 @@ await using (var scope = app.Services.CreateAsyncScope())
     }
 
     await IdentityRoleSeed.EnsureRolesAsync(scope.ServiceProvider, app.Lifetime.ApplicationStopping);
-    if (app.Environment.IsDevelopment())
-    {
-        await IdentityDevelopmentSeed.TryApplyAsync(scope.ServiceProvider, app.Lifetime.ApplicationStopping);
-    }
+    await IdentityUserSeed.TryApplyAsync(scope.ServiceProvider, app.Lifetime.ApplicationStopping);
 }
 
 await KnowledgeStartup.PrepareAsync(

@@ -103,6 +103,7 @@ Legacy SAS / Markdown / Application + Domain code / generated reports
 | SQLite as the only database | Implemented |
 | Excel import with validation | Implemented |
 | Single-school and all-school PDF generation | Implemented |
+| Local in-browser PDF Portfolio preview | Implemented |
 | Sequential and bounded-parallel generate-all | Implemented |
 | Blazor Server UI | Implemented |
 | ASP.NET Core Identity + school-level authorization | Implemented |
@@ -199,7 +200,7 @@ The PDF layer does not recompute business statistics. Presentation tests use a h
 - ClosedXML (`ExcelGraduateImportService`, `ExcelGraduateWorkbookParser`)
 - QuestPDF (`QuestPdfAccessiblePdfGenerator`)
 - Report orchestration (`ReportGenerationService`)
-- Knowledge ingest, retrieval, assistant, Gemini/lexical/OpenAI-compatible embeddings, Gemini-compatible chat
+- Knowledge ingest, retrieval, assistant, OpenAI-compatible embeddings and chat, optional Gemini/lexical embeddings
 - Identity seed helpers and `ReportAuthorizationService`
 
 ### Web (`src/AccessibleSchoolReports.Web`)
@@ -211,6 +212,7 @@ Blazor Server composition root. Pages, cookie Identity, download endpoints, `Kno
 | `/signin` | Anonymous | Local Identity sign-in |
 | `/` | `RequireReportAccess` | Dashboard |
 | `/import` | `RequireAdmin` | Excel import |
+| `/portfolio` | `RequireAdmin` | Local PDF Portfolio and embedded-PDF preview |
 | `/generate` | `RequireReportGeneration` | One school PDF |
 | `/generate-all` | `RequireAdmin` | Sequential or bounded-parallel all-school |
 | `/runs` | `RequireReportAccess` | Run history |
@@ -233,6 +235,7 @@ Blazor Server composition root. Pages, cookie Identity, download endpoints, `Kno
 | ClosedXML | Excel `.xlsx` import |
 | QuestPDF | Tagged-PDF / PDF-UA-oriented generation |
 | PdfPig | Text extraction for generated-PDF knowledge ingest |
+| PDF.js | In-browser PDF Portfolio attachment listing and preview |
 | xUnit | Characterization, unit, and integration tests |
 | Git / GitHub | Source control and pull requests |
 | GitHub Actions | `.github/workflows/quality.yml` |
@@ -241,7 +244,7 @@ Blazor Server composition root. Pages, cookie Identity, download endpoints, `Kno
 | Playwright MCP | Cursor-session browser review only — **no** Playwright test project |
 | SQLite MCP | Read-only inspect script for `data/schoolreports.db` |
 | OpenAI-compatible HTTP | Optional chat completions; optional remote embeddings |
-| Hashed lexical vectors | Default RAG embeddings (`Lexical` / `hashed-bow`) |
+| Hashed lexical vectors | Optional local-only RAG embeddings (`Lexical` / `hashed-bow`) |
 
 Node.js is used only for the optional SQLite MCP script, not by the web app.
 
@@ -355,8 +358,8 @@ SQLite is the **required** MVP database (`.cursor/rules/30-mvp-constraints.mdc`)
 
 | Item | Value |
 |---|---|
-| Connection | `ConnectionStrings:SchoolReports` = `Data Source=data/schoolreports.db` |
-| Resolved path | Repository-root `data/schoolreports.db` via `SqliteConnectionString.FindRepositoryRoot` |
+| Connection | Local `ConnectionStrings:SchoolReports` = `Data Source=data/schoolreports.db`; IIS package targets `C:\ProgramData\AccessibleSchoolReports\data\schoolreports.db` |
+| Resolved path | Local repository-root `data/schoolreports.db`; IIS uses the persistent ProgramData folder |
 | Context | `SchoolReportsDbContext` : `IdentityDbContext<IdentityUser>` |
 | Startup | `MigrateAsync` then Identity role seed |
 | Migrations | Under `src/AccessibleSchoolReports.Infrastructure/Persistence/Migrations/` |
@@ -414,7 +417,7 @@ Preserved layout (see `.cursor/rules/60-pdf-visual-parity.mdc`):
 - Centered Bold Italic school name and report title
 - Gray header cells, black grid, 8 pt body / 9 pt headers
 - `Total Reported` as a table row under the headers on page 1
-- Note, then test-client footer, in content flow
+- Page note in content flow; the test-client preparation line, disclaimer, and URL are omitted from generated PDFs
 - Missing / suppressed values as `.` (screen-reader name: Not displayed)
 - Year chrome from the 2025 SAS program: **Class of 2025**, July **2026** (not the baseline artifact’s 2024 / July 2025)
 
@@ -500,6 +503,10 @@ Implemented protections:
 - Path-traversal query/route variants are tested and denied
 - Missing or deleted files → 404
 
+### Local PDF Portfolio preview
+
+The Admin-only `/portfolio` page uses PDF.js in the browser to list and preview embedded PDF files. Selected portfolios are processed locally in the browser: the application does not upload or persist them, and they are not sent to the Knowledge Assistant or an AI provider. The file-size limit is 25 MB; only embedded PDFs within the preview limits can be opened.
+
 ---
 
 ## Legacy Knowledge Assistant / RAG
@@ -513,7 +520,7 @@ Ingestion (text + SHA-256)
       ↓
 Chunking (Rule IDs when present)
       ↓
-Embeddings (default: lexical hashed-bow)
+Embeddings (default: OpenAI `text-embedding-3-small`)
       ↓
 Authorization-aware retrieval
       ↓
@@ -537,7 +544,7 @@ Indexed catalog (`KnowledgeSourceCatalog`):
 
 Generated school PDFs are indexed after a successful generate (`AuthorizationScope=Report`). Excel files, `data/`, and `evidence/` are not ingested.
 
-Default embeddings are **local lexical** so Ask does not require hundreds of remote embedding calls. `LanguageModel:ApiKey` is used for chat. See [`docs/capstone/external-rag-api.md`](docs/capstone/external-rag-api.md) and [`docs/capstone/generated-pdf-rag.md`](docs/capstone/generated-pdf-rag.md).
+Default embeddings use OpenAI `text-embedding-3-small`; chat uses OpenAI `gpt-4o-mini`. Configure the server-side `Embeddings:ApiKey` and `LanguageModel:ApiKey`. See [`docs/capstone/external-rag-api.md`](docs/capstone/external-rag-api.md) and [`docs/capstone/generated-pdf-rag.md`](docs/capstone/generated-pdf-rag.md).
 
 On startup (except `Testing`), `KnowledgeStartup` ingests the catalog and indexes pending embeddings. Restart the web app after changing secrets.
 
@@ -784,9 +791,9 @@ dotnet restore
 dotnet build AccessibleSchoolReports.sln
 ```
 
-### Development user
+### Local user
 
-Committed `appsettings.json` keeps seed credentials empty. Set user secrets locally:
+Seed settings are optional and work in any environment. Set user secrets locally:
 
 ```powershell
 dotnet user-secrets set Identity:SeedUserName "dev.user" --project src/AccessibleSchoolReports.Web
@@ -851,6 +858,8 @@ exit $?
 
 The MVP is a **single .NET 8 process + SQLite file + PDF folder**. That is a machine, not a static site. There is no Dockerfile. Do not add a second database to fit a host.
 
+For Windows/IIS deployment, build the publish ZIP with `.\scripts\New-IisDeploymentPackage.ps1` and follow [`docs/deployment/iis.md`](docs/deployment/iis.md).
+
 ### What not to use
 
 | Host | Why it does not fit |
@@ -876,14 +885,13 @@ Put the database and PDFs on **local disk** (for example `/var/data`), not on a 
 
 | Variable | Value |
 |---|---|
-| `ASPNETCORE_ENVIRONMENT` | `Development` (Identity seed runs only in Development) |
 | `ASPNETCORE_URLS` | `http://0.0.0.0:80` |
 | `ConnectionStrings__SchoolReports` | `Data Source=/var/data/schoolreports.db` |
 | `ReportGeneration__OutputRoot` | `/var/data/output` |
-| `Identity__SeedUserName` / `SeedPassword` / `SeedRole` | Demo Admin (`SeedRole=Admin`) |
-| `Embeddings__Provider` | `Gemini` |
-| `Embeddings__ApiKey` | Gemini API key for semantic embeddings |
-| `LanguageModel__Endpoint` / `Model` / `ApiKey` | Gemini Chat Completions endpoint, `gemini-3.8-flash`, and Gemini API key |
+| `Identity__SeedUserName` / `SeedPassword` / `SeedRole` | Optional seed account; works in any environment |
+| `Embeddings__Provider` | `OpenAICompatible` |
+| `Embeddings__ApiKey` | OpenAI API key for embeddings |
+| `LanguageModel__Endpoint` / `Model` / `ApiKey` | OpenAI Chat Completions endpoint, `gpt-4o-mini`, and OpenAI API key |
 
 Run `AccessibleSchoolReports.Web.dll` with systemd (Linux) or as a Windows service. `/legacy` is not on GitHub — import, generate, and dashboard still work; SAS catalog files are missing unless you copy them onto the VM.
 
@@ -895,16 +903,16 @@ Do not generate all 189 schools on a first host. Do not enable more than one ins
 
 | Key | Role |
 |---|---|
-| `ConnectionStrings:SchoolReports` | SQLite path (`Data Source=data/schoolreports.db`) |
-| `Identity:SeedUserName` / `SeedPassword` / `SeedRole` | Optional development user |
-| `ReportGeneration:OutputRoot` | PDF root (`output` under the Web content root) |
+| `ConnectionStrings:SchoolReports` | SQLite file (`C:\ProgramData\AccessibleSchoolReports\data\schoolreports.db` on IIS) |
+| `Identity:SeedUserName` / `SeedPassword` / `SeedRole` | Optional seeded user; when configured, startup creates the user or resets its password and ensures the requested role. Clear these settings after account setup. |
+| `ReportGeneration:OutputRoot` | PDF root (`C:\ProgramData\AccessibleSchoolReports\output` on IIS) |
 | `ReportGeneration:ClassYear` | Default `2025` |
 | `ReportGeneration:DefaultMaxParallelism` | Default `4` |
-| `Embeddings:Provider` | `Gemini` (default), `OpenAICompatible`, or `Lexical` for local hashed vectors |
-| `Embeddings:Model` | `gemini-embedding-001` by default |
-| `Embeddings:ApiKey` | Gemini API key for remote embeddings |
-| `LanguageModel:ApiKey` | Gemini API key for live chat completions |
-| `LanguageModel:Endpoint` / `Model` | Google's OpenAI-compatible endpoint / `gemini-3.8-flash` |
+| `Embeddings:Provider` | `OpenAICompatible` (default), `Gemini`, or `Lexical` for local hashed vectors |
+| `Embeddings:Model` | `text-embedding-3-small` by default (1536 dimensions) |
+| `Embeddings:ApiKey` | OpenAI API key for remote embeddings |
+| `LanguageModel:ApiKey` | OpenAI API key for live chat completions |
+| `LanguageModel:Endpoint` / `Model` | OpenAI-compatible endpoint / `gpt-4o-mini` |
 
 Placeholders (user secrets or environment; never commit real values):
 
@@ -1002,7 +1010,7 @@ What exists:
 - Each `ReportRun` stores `DurationMilliseconds` (Run History)
 - Integration tests assert sequential and parallel generate-all complete with a non-negative duration
 - Sequential vs parallel is checked for equivalent PDF **text**, not a required speedup
-- Default RAG embeddings are local lexical vectors so Ask does not depend on embedding-API quota
+- Default RAG embeddings use OpenAI; `Lexical` remains available for local-only retrieval
 
 If a timed run is needed, generate all schools in the UI and copy the duration from Run History. Do not invent timings.
 

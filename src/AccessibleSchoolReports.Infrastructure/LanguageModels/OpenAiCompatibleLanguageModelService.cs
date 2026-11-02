@@ -118,11 +118,14 @@ public sealed class OpenAiCompatibleLanguageModelService : ILanguageModelService
 
     private HttpRequestMessage CreateRequest(LanguageModelRequest request)
     {
+        var usesGpt5Model = _options.Model.StartsWith("gpt-5", StringComparison.OrdinalIgnoreCase);
         var payload = new ChatRequest
         {
             Model = _options.Model,
-            Temperature = _options.Temperature,
-            MaxTokens = _options.MaxTokens > 0 ? _options.MaxTokens : null,
+            Temperature = usesGpt5Model ? null : _options.Temperature,
+            MaxTokens = !usesGpt5Model && _options.MaxTokens > 0 ? _options.MaxTokens : null,
+            MaxCompletionTokens = usesGpt5Model && _options.MaxTokens > 0 ? _options.MaxTokens : null,
+            ReasoningEffort = usesGpt5Model ? "minimal" : null,
             Messages =
             [
                 new ChatMessage { Role = "system", Content = request.SystemInstructions },
@@ -208,10 +211,16 @@ public sealed class OpenAiCompatibleLanguageModelService : ILanguageModelService
     {
         public required string Model { get; init; }
 
-        public double Temperature { get; init; }
+        public double? Temperature { get; init; }
 
         [JsonPropertyName("max_tokens")]
         public int? MaxTokens { get; init; }
+
+        [JsonPropertyName("max_completion_tokens")]
+        public int? MaxCompletionTokens { get; init; }
+
+        [JsonPropertyName("reasoning_effort")]
+        public string? ReasoningEffort { get; init; }
 
         public required ChatMessage[] Messages { get; init; }
     }

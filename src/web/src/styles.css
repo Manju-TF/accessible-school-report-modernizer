@@ -704,6 +704,79 @@ img.nav-icon.nav-robot {
   gap: 0.45rem 0.9rem;
 }
 
+.download-progress {
+  margin: 0 0 1.2rem;
+}
+
+.download-progress h3 {
+  margin: 0 0 0.35rem;
+}
+
+.download-progress p {
+  margin: 0 0 0.5rem;
+}
+
+.download-progress progress {
+  display: block;
+  width: 100%;
+  height: 1rem;
+  accent-color: var(--accent);
+}
+
+.download-error {
+  color: var(--error-text);
+}
+
+.portfolio-layout {
+  display: grid;
+  grid-template-columns: minmax(16rem, 0.75fr) minmax(0, 2fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.portfolio-files,
+.portfolio-preview {
+  min-width: 0;
+  margin: 0;
+}
+
+.portfolio-files ul {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.portfolio-files li {
+  display: grid;
+  gap: 0.55rem;
+  overflow-wrap: anywhere;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.portfolio-preview iframe {
+  display: block;
+  width: 100%;
+  min-height: 65vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+@media (max-width: 760px) {
+  .portfolio-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+a[aria-disabled="true"] {
+  cursor: wait;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
 .field,
 form,
 fieldset {

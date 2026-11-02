@@ -4,13 +4,13 @@ public sealed class EmbeddingOptions
 {
     public const string SectionName = "Embeddings";
 
-    public string Provider { get; set; } = "Gemini";
+    public string Provider { get; set; } = "OpenAICompatible";
 
-    public string Endpoint { get; set; } = "https://generativelanguage.googleapis.com/v1beta";
+    public string Endpoint { get; set; } = "https://api.openai.com/v1/embeddings";
 
-    public string Model { get; set; } = "gemini-embedding-001";
+    public string Model { get; set; } = "text-embedding-3-small";
 
-    public int Dimensions { get; set; } = 3072;
+    public int Dimensions { get; set; } = 1536;
 
     public int TimeoutSeconds { get; set; } = 30;
 

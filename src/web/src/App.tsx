@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { AppShell } from "./layout/AppShell";
@@ -10,6 +11,21 @@ import { ImportPage } from "./pages/ImportPage";
 import { ReportDetailsPage } from "./pages/ReportDetailsPage";
 import { RunsPage } from "./pages/RunsPage";
 import { SignInPage } from "./pages/SignInPage";
+
+const PdfPortfolioPage = lazy(() =>
+  import("./pages/PdfPortfolioPage").then((module) => ({ default: module.PdfPortfolioPage })),
+);
+
+function RequirePortfolioCapability() {
+  const { user } = useAuth();
+  return user?.capabilities.canImport ? (
+    <Suspense fallback={<p className="lede">Loading PDF preview.</p>}>
+      <PdfPortfolioPage />
+    </Suspense>
+  ) : (
+    <Navigate to="/denied" replace />
+  );
+}
 
 function RequireAuth() {
   const { ready, user } = useAuth();
@@ -33,6 +49,7 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/import" element={<ImportPage />} />
+          <Route path="/portfolio" element={<RequirePortfolioCapability />} />
           <Route path="/generate" element={<GeneratePage />} />
           <Route path="/generate-all" element={<GenerateAllPage />} />
           <Route path="/runs" element={<RunsPage />} />

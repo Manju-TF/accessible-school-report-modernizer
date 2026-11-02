@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiGet, apiPost, ApiError } from "../api/client";
+import { apiGet, apiPostStream, ApiError } from "../api/client";
 import type { GenerateResult } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { LiveStatus, StatusBadge } from "../ui/Status";
@@ -18,6 +18,13 @@ interface GenerateAllResult {
   items: GenerateResult[];
 }
 
+interface GenerationProgress {
+  total: number;
+  completed: number;
+  successful: number;
+  failed: number;
+}
+
 function pickYear(preferred: string, years: string[]) {
   return years.includes(preferred) ? preferred : (years[0] ?? "2025");
 }
@@ -31,10 +38,16 @@ export function GenerateAllPage() {
   const [maxParallelism, setMaxParallelism] = useState(4);
   const [limits, setLimits] = useState({ min: 1, max: 8 });
   const [busy, setBusy] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState<GenerationProgress | null>(null);
   const [tone, setTone] = useState<"info" | "error" | "success" | "warning">("info");
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<GenerateAllResult | null>(null);
+  const [downloadedIds, setDownloadedIds] = useState<string[]>([]);
+  const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+  const [downloadStatus, setDownloadStatus] = useState("");
+  const [activeDownloadId, setActiveDownloadId] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
+  const downloadInProgress = useRef(false);
 
   useEffect(() => {
     void apiGet<{
@@ -68,16 +81,25 @@ export function GenerateAllPage() {
     abort.current?.abort();
     abort.current = new AbortController();
     setBusy(true);
+    setGenerationProgress({ total: eligibleCount, completed: 0, successful: 0, failed: 0 });
     setResult(null);
+    setDownloadedIds([]);
+    setDownloadErrors({});
+    setDownloadStatus("");
     setTone("info");
     setMessage(mode === "parallel" ? `Generating all reports in parallel with maximum parallelism ${maxParallelism}.` : "Generating all reports sequentially.");
     try {
-      const generated = await apiPost<GenerateAllResult>(
-        "/api/reports/all",
+      const generated = await apiPostStream<GenerateAllResult, GenerationProgress>(
+        "/api/reports/all/progress",
         { mode, maxParallelism, classYear },
+        setGenerationProgress,
         abort.current.signal,
       );
       setResult(generated);
+      setDownloadedIds([]);
+      setDownloadErrors({});
+      const downloadableCount = generated.items.filter((item) => item.downloadUrl).length;
+      setDownloadStatus(`Downloaded 0 of ${downloadableCount} reports. ${downloadableCount} pending.`);
       setTone(generated.statusTone);
       setMessage(`Generate all ${generated.status.toLowerCase()}. Successful ${generated.successful} of ${generated.total}. Failed ${generated.failed}. Duration ${generated.duration}.`);
     } catch (cause) {
@@ -91,6 +113,76 @@ export function GenerateAllPage() {
       setMessage(cause instanceof ApiError ? cause.message : "Generate all failed.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const downloadReport = async (item: GenerateResult, itemKey: string) => {
+    if (!item.downloadUrl || downloadInProgress.current) {
+      return;
+    }
+
+    downloadInProgress.current = true;
+    setActiveDownloadId(itemKey);
+    setDownloadErrors((current) => {
+      const next = { ...current };
+      delete next[itemKey];
+      return next;
+    });
+    setDownloadStatus(
+      `Downloading PDF for ${item.schoolLabel}. ${downloadedIds.length} of ${result?.items.filter((report) => report.downloadUrl).length ?? 0} downloaded; ${Math.max(0, (result?.items.filter((report) => report.downloadUrl).length ?? 0) - downloadedIds.length)} pending.`,
+    );
+
+    try {
+      const response = await fetch(item.downloadUrl, {
+        credentials: "include",
+        headers: { Accept: "application/pdf" },
+      });
+      if (!response.ok) {
+        throw new ApiError(
+          response.status === 401
+            ? "Your session has expired. Sign in again to download this report."
+            : response.status === 403
+              ? "You do not have permission to download this report."
+              : "The report download failed.",
+          response.status,
+        );
+      }
+
+      const contentType = response.headers.get("Content-Type")?.split(";")[0].trim().toLowerCase();
+      if (contentType !== "application/pdf") {
+        throw new Error("The server did not return a PDF. Sign in again and retry the download.");
+      }
+
+      const pdf = await response.blob();
+      const fileName = decodeURIComponent(new URL(item.downloadUrl, window.location.origin).pathname.split("/").pop() || "report.pdf");
+      const downloadUrl = URL.createObjectURL(pdf);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = fileName;
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+
+      const nextDownloadedIds = downloadedIds.includes(itemKey)
+        ? downloadedIds
+        : [...downloadedIds, itemKey];
+      setDownloadedIds(nextDownloadedIds);
+      const totalDownloads = result?.items.filter((report) => report.downloadUrl).length ?? 0;
+      setDownloadStatus(
+        `Downloaded ${nextDownloadedIds.length} of ${totalDownloads} reports. ${totalDownloads - nextDownloadedIds.length} pending.`,
+      );
+    } catch (cause) {
+      const downloadError = cause instanceof Error ? cause.message : "The report download failed.";
+      setDownloadErrors((current) => ({ ...current, [itemKey]: downloadError }));
+      const totalDownloads = result?.items.filter((report) => report.downloadUrl).length ?? 0;
+      setDownloadStatus(
+        `Could not download ${item.schoolLabel}. ${downloadedIds.length} of ${totalDownloads} downloaded; ${totalDownloads - downloadedIds.length} pending. ${downloadError}`,
+      );
+    } finally {
+      downloadInProgress.current = false;
+      setActiveDownloadId(null);
     }
   };
 
@@ -121,7 +213,7 @@ export function GenerateAllPage() {
           />
         </section>
       ) : (
-        <form className="workbench" aria-label="Generate all school reports" aria-busy={busy} onSubmit={(event) => void onSubmit(event)}>
+        <form className="workbench" aria-label="Generate all school reports" aria-busy={busy || activeDownloadId !== null} onSubmit={(event) => void onSubmit(event)}>
           <div className="field-grid">
             <div className="field">
               <label htmlFor="all-report-year">Class year</label>
@@ -170,13 +262,28 @@ export function GenerateAllPage() {
             </div>
           </fieldset>
           <div className="actions">
-            <button type="submit" disabled={busy}>
+            <button type="submit" disabled={busy || activeDownloadId !== null}>
               {busy ? "Generating all reports" : "Generate all reports"}
             </button>
             <button type="button" className="button-secondary" disabled={!busy} onClick={() => abort.current?.abort()}>
               Cancel generation
             </button>
           </div>
+          {busy && generationProgress ? (
+            <section className="download-progress" aria-labelledby="generate-all-progress-heading">
+              <h3 id="generate-all-progress-heading">Report generation progress</h3>
+              <p role="status" aria-live="polite">
+                {generationProgress.completed} of {generationProgress.total} reports completed.
+                {" "}{Math.max(0, generationProgress.total - generationProgress.completed)} remaining.
+                {" "}Successful {generationProgress.successful}; failed {generationProgress.failed}.
+              </p>
+              <progress
+                value={generationProgress.completed}
+                max={Math.max(1, generationProgress.total)}
+                aria-label={`${generationProgress.completed} of ${generationProgress.total} reports generated`}
+              />
+            </section>
+          ) : null}
           <p className="hint">
             {eligibleCount} eligible {eligibleCount === 1 ? "school" : "schools"} for Class of {classYear}. This can take several minutes. Cancel stops the request from this browser.
           </p>
@@ -208,6 +315,17 @@ export function GenerateAllPage() {
             </div>
           </div>
           {result.message ? <p>{result.message}</p> : null}
+          {result.items.some((item) => item.downloadUrl) ? (
+            <section className="download-progress" aria-labelledby="generate-all-download-heading">
+              <h3 id="generate-all-download-heading">Report downloads</h3>
+              <p role="status" aria-live="polite">{downloadStatus}</p>
+              <progress
+                value={downloadedIds.length}
+                max={result.items.filter((item) => item.downloadUrl).length}
+                aria-label={`${downloadedIds.length} of ${result.items.filter((item) => item.downloadUrl).length} reports downloaded`}
+              />
+            </section>
+          ) : null}
           <p className="actions">
             <Link className="button" to={`/runs?run=${result.runId}`}>
               View this run in history
@@ -226,33 +344,59 @@ export function GenerateAllPage() {
                   <tr>
                     <th scope="col">School</th>
                     <th scope="col">Status</th>
+                    <th scope="col">Download status</th>
                     <th scope="col">Links</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {result.items.map((item) => (
-                    <tr key={`${item.schoolId}-${item.reportRunItemId ?? item.runId}`}>
-                      <td>{item.schoolLabel}</td>
-                      <td>
-                        <StatusBadge status={item.status} tone={item.statusTone} />
-                      </td>
-                      <td>
-                        <span className="inline-links">
-                          {item.downloadUrl ? (
-                            <a href={item.downloadUrl} download target="_blank" rel="noopener">
-                              Download PDF for {item.schoolLabel}
-                            </a>
-                          ) : null}
-                          {item.reportRunItemId ? (
-                            <Link to={`/reports/${item.reportRunItemId}`}>Report details for {item.schoolLabel}</Link>
-                          ) : null}
-                          {item.reportRunItemId ? (
-                            <Link to={`/knowledge-assistant?report=${item.reportRunItemId}`}>Ask about {item.schoolLabel}</Link>
-                          ) : null}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {result.items.map((item) => {
+                    const itemKey = `${item.schoolId}-${item.reportRunItemId ?? item.runId}`;
+                    const isDownloaded = downloadedIds.includes(itemKey);
+                    const isDownloading = activeDownloadId === itemKey;
+                    return (
+                      <tr key={itemKey}>
+                        <td>{item.schoolLabel}</td>
+                        <td>
+                          <StatusBadge status={item.status} tone={item.statusTone} />
+                        </td>
+                        <td>
+                          {item.downloadUrl
+                            ? downloadErrors[itemKey]
+                              ? "Failed; pending retry"
+                              : isDownloading
+                                ? "Downloading"
+                                : isDownloaded
+                                  ? "Downloaded"
+                                  : "Pending"
+                            : "Not available"}
+                        </td>
+                        <td>
+                          <span className="inline-links">
+                            {item.downloadUrl ? (
+                              <a
+                                href={item.downloadUrl}
+                                download
+                                aria-disabled={activeDownloadId !== null}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  void downloadReport(item, itemKey);
+                                }}
+                              >
+                                {isDownloading ? "Downloading..." : isDownloaded ? "Download again" : `Download PDF for ${item.schoolLabel}`}
+                              </a>
+                            ) : null}
+                            {downloadErrors[itemKey] ? <span className="download-error">{downloadErrors[itemKey]}</span> : null}
+                            {item.reportRunItemId ? (
+                              <Link to={`/reports/${item.reportRunItemId}`}>Report details for {item.schoolLabel}</Link>
+                            ) : null}
+                            {item.reportRunItemId ? (
+                              <Link to={`/knowledge-assistant?report=${item.reportRunItemId}`}>Ask about {item.schoolLabel}</Link>
+                            ) : null}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

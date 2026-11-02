@@ -8,7 +8,7 @@ The Knowledge Assistant page is at `/knowledge-assistant` and requires authentic
 
 `IKnowledgeAssistantService` answers from authorized chunks through `ILanguageModelService`. Application sign-in stays Identity cookies (`.asr.auth`). The language-model API key is not an identity provider and is not a user JWT. The page does not display API keys, embeddings, unauthorized text, physical file paths, or internal database identifiers.
 
-On startup (except the `Testing` environment) `KnowledgeStartup` ingests the catalog and indexes chunks with Gemini embeddings (`gemini-embedding-001`). Chat generation uses Gemini `gemini-3.8-flash` through Google's OpenAI-compatible Chat Completions endpoint; embeddings use Gemini's native `batchEmbedContents` API. The same Gemini API key can be configured as both `LanguageModel:ApiKey` and `Embeddings:ApiKey`. Restart the web app after changing secrets so ingest/index and the trimmed key are loaded.
+On startup (except the `Testing` environment) `KnowledgeStartup` ingests the catalog and indexes chunks with OpenAI embeddings (`text-embedding-3-small`). Chat generation uses `gpt-4o-mini` through the OpenAI-compatible Chat Completions endpoint. The same OpenAI API key can be configured as both `LanguageModel:ApiKey` and `Embeddings:ApiKey`. Restart the web app after changing configuration so ingest/index and the trimmed key are loaded.
 
 ## Connecting ingestion to embeddings
 
@@ -49,8 +49,8 @@ Each hit includes source metadata: `RuleId`, `SchoolId`, `ReportId`, `ReportYear
 | Interface | `ILanguageModelService` |
 | Assistant | `IKnowledgeAssistantService` |
 | Implementation | `OpenAiCompatibleLanguageModelService` |
-| Endpoint | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` |
-| Model | `gemini-3.8-flash` |
+| Endpoint | `https://api.openai.com/v1/chat/completions` |
+| Model | `gpt-4o-mini` |
 
 Flow: authenticated user → authorization-aware retrieval → authorized chunks only → grounded prompt → external LLM → answer + sources.
 
@@ -66,12 +66,12 @@ dotnet user-secrets set LanguageModel:ApiKey "your-key" --project src/Accessible
 
 | Setting | Default |
 |---|---|
-| Provider | `Gemini` (default). Set `OpenAICompatible` for an OpenAI-compatible embedding endpoint or `Lexical` for local hashed vectors. |
+| Provider | `OpenAICompatible` (default). Set `Gemini` for Gemini embeddings or `Lexical` for local hashed vectors. |
 | Interface | `IEmbeddingService` (Application) |
-| Implementation | `GeminiEmbeddingService` by default; `OpenAiCompatibleEmbeddingService` for `OpenAICompatible`; `LexicalEmbeddingService` for `Lexical` |
-| Endpoint | `https://generativelanguage.googleapis.com/v1beta` (Gemini API base URL) |
+| Implementation | `OpenAiCompatibleEmbeddingService` by default; `GeminiEmbeddingService` for `Gemini`; `LexicalEmbeddingService` for `Lexical` |
+| Endpoint | `https://api.openai.com/v1/embeddings` |
 
-Gemini document chunks are sent to `models/{Embeddings:Model}:batchEmbedContents` with `RETRIEVAL_DOCUMENT`; user questions use `RETRIEVAL_QUERY`. Gemini authentication uses the `x-goog-api-key` header. The OpenAI-compatible option remains available for endpoints that accept the same JSON body (`model`, `input`, `dimensions`) and bearer token.
+Document chunks and user queries are sent to the configured OpenAI-compatible embeddings endpoint as `model`, `input`, and `dimensions`, authenticated with a bearer token.
 
 There is no live provider call in unit tests. Tests use `FakeEmbeddingService` or a scripted `HttpMessageHandler`.
 
@@ -79,10 +79,10 @@ There is no live provider call in unit tests. Tests use `FakeEmbeddingService` o
 
 | Setting | Default |
 |---|---|
-| Model | `gemini-embedding-001` |
-| Dimensions | `3072` (validated on every vector) |
+| Model | `text-embedding-3-small` |
+| Dimensions | `1536` (validated on every vector) |
 
-The configured dimension is sent as `outputDimensionality`. A response vector of a different length is rejected (`EmbeddingDimensionException`). Stored chunks record `EmbeddingModel` as `{Provider}/{Model}`.
+The configured dimension is sent as `dimensions`. A response vector of a different length is rejected (`EmbeddingDimensionException`). Stored chunks record `EmbeddingModel` as `{Provider}/{Model}`.
 
 ## Data sent
 
@@ -101,7 +101,7 @@ Graduate worksheets and raw student tables are not an embedding source. Report P
 
 `Embeddings:ApiKey` is bound from configuration. Committed `appsettings.json` keeps the value empty.
 
-Set the key in user secrets or the environment. Do not commit it. Do not put it in Blazor components, `wwwroot`, or browser-visible config.
+Set the key in user secrets, protected server configuration, or the server's `appsettings.json`. Do not commit it. Do not put it in `wwwroot`, client-side configuration, or browser-visible files.
 
 ```powershell
 dotnet user-secrets set Embeddings:ApiKey "your-key" --project src/AccessibleSchoolReports.Web
@@ -109,7 +109,7 @@ dotnet user-secrets set Embeddings:ApiKey "your-key" --project src/AccessibleSch
 
 For local lexical-only operation, set `Embeddings:Provider` to `Lexical`. This avoids sending document text to an external embedding provider, but uses keyword-oriented hashed vectors and may reduce semantic recall. Switching providers or models causes chunks to be re-embedded with the selected model during startup indexing.
 
-For the Gemini provider, the key is sent only as `x-goog-api-key` from the server-side `HttpClient`. The OpenAI-compatible provider uses `Authorization: Bearer`. Application authentication remains Identity cookies.
+The OpenAI-compatible provider uses `Authorization: Bearer` from the server-side `HttpClient`. Application authentication remains Identity cookies.
 
 `EmbeddingOptions.ToString()` omits the key. Embedding logs include provider, model, status, and counts — not the key and not chunk text.
 

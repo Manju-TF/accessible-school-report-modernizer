@@ -40,8 +40,9 @@ public sealed class QuestPdfAccessiblePdfGeneratorTests
         Assert.Contains("Long-term", text);
         Assert.Contains("(1+ years)", text);
         Assert.Contains("At least five salaries are required", text);
-        Assert.Contains(SchoolReportPresentation.PreparedLine, text);
-        Assert.Contains(SchoolReportPresentation.FooterUrl, text);
+        Assert.DoesNotContain("Table prepared by Meridian Test Client", text);
+        Assert.DoesNotContain("Meridian Test Client Summary Report data may vary", text);
+        Assert.DoesNotContain("www.example.com/report-info", text);
         Assert.DoesNotContain("NALP", text, StringComparison.Ordinal);
         Assert.DoesNotContain("ABA", text, StringComparison.Ordinal);
         Assert.DoesNotContain("nalp.org", text, StringComparison.OrdinalIgnoreCase);
@@ -50,7 +51,7 @@ public sealed class QuestPdfAccessiblePdfGeneratorTests
     }
 
     [Fact]
-    public void Generate_PageOne_ReadsSchoolNameThenHeadersThenTotalThenTablesThenNoteThenLink()
+    public void Generate_PageOne_ReadsSchoolNameThenHeadersThenTotalThenTablesThenNote()
     {
         var pageOne = ExtractPageText(_generator.Generate(FixtureReport()), pageNumber: 1);
 
@@ -66,18 +67,18 @@ public sealed class QuestPdfAccessiblePdfGeneratorTests
         Assert.True(
             IndexOf(pageOne, "Gender Reported") < IndexOf(pageOne, "At least five salaries are required"),
             "Table sections should be announced before the page note.");
-        Assert.True(
-            IndexOf(pageOne, "At least five salaries are required") < IndexOf(pageOne, SchoolReportPresentation.FooterUrl),
-            "The page note should be announced before the test-client footer.");
+        Assert.DoesNotContain("Table prepared by", pageOne);
+        Assert.DoesNotContain("Summary Report data may vary", pageOne);
     }
 
     [Fact]
-    public void Generate_PrintsNalpFooterOncePerPage_NotDuplicated()
+    public void Generate_OmitsTestClientFooterOnEveryPage()
     {
         var text = ExtractText(_generator.Generate(FixtureReport()));
-        var prepared = CountOccurrences(text, SchoolReportPresentation.PreparedLine);
 
-        Assert.Equal(7, prepared);
+        Assert.DoesNotContain("Table prepared by", text);
+        Assert.DoesNotContain("Summary Report data may vary", text);
+        Assert.DoesNotContain("www.example.com/report-info", text);
         Assert.DoesNotContain("#084C9E", text);
         Assert.DoesNotContain("shown in red", text, StringComparison.OrdinalIgnoreCase);
     }
@@ -166,23 +167,6 @@ public sealed class QuestPdfAccessiblePdfGeneratorTests
         using var document = PdfDocument.Open(new MemoryStream(pdf));
         var page = document.GetPage(pageNumber);
         return string.Join(" ", page.GetWords().Select(word => word.Text));
-    }
-
-    private static int CountOccurrences(string text, string value)
-    {
-        var count = 0;
-        var start = 0;
-        while (true)
-        {
-            var index = text.IndexOf(value, start, StringComparison.Ordinal);
-            if (index < 0)
-            {
-                return count;
-            }
-
-            count++;
-            start = index + value.Length;
-        }
     }
 
     private static int IndexOf(string text, string value)

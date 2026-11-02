@@ -13,6 +13,6 @@ export default defineConfig({
   },
   build: {
     outDir: "../AccessibleSchoolReports.Web/wwwroot",
-    emptyOutDir: false,
+    emptyOutDir: true,
   },
 });

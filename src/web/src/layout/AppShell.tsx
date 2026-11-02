@@ -17,6 +17,7 @@ const sections = [
     links: [
       { to: "/", label: "Dashboard", icon: "dashboard", show: (c: Capabilities) => c.canViewReports },
       { to: "/import", label: "Import data", icon: "import", show: (c: Capabilities) => c.canImport },
+      { to: "/portfolio", label: "PDF Portfolio", icon: "portfolio", show: (c: Capabilities) => c.canImport },
     ],
   },
   {
@@ -57,6 +58,7 @@ function NavIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
     dashboard: "M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z",
     import: "M12 3v12m0 0-4-4m4 4 4-4M5 19h14",
+    portfolio: "M5 3h10l4 4v14H5V3zm10 0v5h4M8 12h8M8 16h8",
     generate: "M7 3h7l5 5v13H7V3zm7 0v5h5",
     "generate-all": "M6 7h12M6 12h12M6 17h8",
     history: "M12 7v5l3 2m6-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",

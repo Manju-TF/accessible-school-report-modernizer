@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 using AccessibleSchoolReports.Application.Knowledge;
 using AccessibleSchoolReports.Infrastructure.LanguageModels;
 using AccessibleSchoolReports.UnitTests.Knowledge;
@@ -46,8 +47,30 @@ public sealed class OpenAiCompatibleLanguageModelServiceTests
         Assert.Contains(KnowledgeGroundedPromptTests.SasInjection, body, StringComparison.Ordinal);
         Assert.Contains("UNTRUSTED PROJECT DATA", body, StringComparison.Ordinal);
         Assert.Contains("Do not invent business rules", body, StringComparison.Ordinal);
+        Assert.Contains("\"temperature\":0", body, StringComparison.Ordinal);
+        Assert.Contains("\"max_tokens\":200", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("max_completion_tokens", body, StringComparison.Ordinal);
         Assert.Equal("Bearer", handler.Requests[0].Headers.Authorization?.Scheme);
         Assert.All(logger.Messages, message => Assert.DoesNotContain("super-secret-key", message, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Complete_Gpt5Model_UsesCompletionTokensAndOmitsUnsupportedTemperature()
+    {
+        var handler = ScriptedHandler.Success("answer");
+        var options = DefaultOptions();
+        options.Model = "gpt-5-nano";
+        var service = CreateService(handler, options: options);
+
+        await service.CompleteAsync(EmptyRequest());
+
+        using var body = JsonDocument.Parse(Assert.Single(handler.Bodies));
+        var root = body.RootElement;
+        Assert.Equal("gpt-5-nano", root.GetProperty("model").GetString());
+        Assert.Equal(200, root.GetProperty("max_completion_tokens").GetInt32());
+        Assert.False(root.TryGetProperty("max_tokens", out _));
+        Assert.False(root.TryGetProperty("temperature", out _));
+        Assert.Equal("minimal", root.GetProperty("reasoning_effort").GetString());
     }
 
     [Fact]
